@@ -3,14 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
-import shutil
 import subprocess
 import sys
 
 import click
-import requests
 
 from . import __version__
 from .config import Config, get_config
@@ -139,7 +136,7 @@ def check() -> None:
 @click.option("--dry-run", is_flag=True, help="Preview installation without changes.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.option("--build-from-source", is_flag=True, help="Compile Python from source (Linux only)")
-def install(version: str, dry_run, yes: bool, build_from_source: bool = False) -> None:
+def install(version: str, dry_run: bool, yes: bool, build_from_source: bool = False) -> None:
     """Install a specific Python version.
 
     Examples:
@@ -150,7 +147,6 @@ def install(version: str, dry_run, yes: bool, build_from_source: bool = False) -
     """Install a specific Python version."""
     if dry_run:
         click.secho(f"[DRY-RUN] Would download and install Python {version}", fg="yellow")
-        click.echo("[DRY-RUN] No files will be modified.")
         return
 
     try:
@@ -207,12 +203,11 @@ def install(version: str, dry_run, yes: bool, build_from_source: bool = False) -
 @click.argument("version")
 @click.option("--dry-run", is_flag=True, help="Preview removal without deleting files.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def remove(version: str, dry_run, yes: bool) -> None:
+def remove(version: str, dry_run: bool, yes: bool) -> None:
     """Remove a specific Python version."""
 
     if dry_run:
         click.secho(f"[DRY-RUN] Would remove Python {version}", fg="yellow")
-        click.echo("[DRY-RUN] No files will be modified.")
         return
 
     try:
@@ -615,48 +610,6 @@ def venv_activate(name: str) -> None:
     else:
         click.echo(f"❌ Venv '{name}' not found.")
         sys.exit(1)
-
-
-@cli.command()
-def doctor():
-    """Run a health check of the environment."""
-    click.secho("🩺 Running pyvm-updater health check...", fg="cyan", bold=True)
-    click.echo("-" * 40)
-
-    all_passed = True
-
-    # 1. Check for Helper Tools (pyenv or mise)
-    pyenv_path = shutil.which("pyenv")
-    mise_path = shutil.which("mise")
-    if pyenv_path or mise_path:
-        tool = "pyenv" if pyenv_path else "mise"
-        click.secho(f" [✓] Helper Tool: Found {tool} at {pyenv_path or mise_path}", fg="green")
-    else:
-        click.secho(" [!] Helper Tool: Neither pyenv nor mise found. (Recommended for Linux/macOS)", fg="yellow")
-
-    # 2. Check Network Reachability
-    try:
-        # Checking python.org since that's where updates are fetched from
-        requests.get("https://www.python.org", timeout=5)
-        click.secho(" [✓] Network: Successfully reached python.org", fg="green")
-    except Exception:
-        click.secho(" [✗] Network: Failed to reach python.org. Check your connection.", fg="red")
-        all_passed = False
-
-    # 3. Check Write Permissions
-    # pyvm typically uses ~/.config/pyvm or the current directory for logs/configs
-    target_dir = os.path.expanduser("~")
-    if os.access(target_dir, os.W_OK):
-        click.secho(f" [✓] Permissions: Write access to {target_dir} confirmed", fg="green")
-    else:
-        click.secho(f" [✗] Permissions: No write access to {target_dir}", fg="red")
-        all_passed = False
-
-    click.echo("-" * 40)
-    if all_passed:
-        click.secho(" System is healthy and ready to use!", fg="bright_cyan", bold=True)
-    else:
-        click.secho(" Some checks failed. Please resolve the red items above.", fg="yellow")
 
 
 def main() -> None:
