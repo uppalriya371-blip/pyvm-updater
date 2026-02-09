@@ -15,6 +15,12 @@ from bs4 import BeautifulSoup
 from packaging import version as pkg_version
 
 from .constants import MAX_RETRIES, REQUEST_TIMEOUT, RETRY_DELAY
+from .metadata_store import (
+    get_releases_from_cache,
+    get_versions_from_cache,
+    start_background_sync_if_stale,
+    sync_python_org,
+)
 from .utils import get_os_info, validate_version_string
 
 
@@ -242,89 +248,97 @@ def get_latest_python_info() -> tuple[str | None, str | None]:
 
 
 def get_active_python_releases() -> list[dict[str, Any]]:
-    """Fetch active/supported Python releases from python.org."""
-    URL = "https://www.python.org/downloads/"
-    releases: list[dict[str, Any]] = []
-
+    cached = get_releases_from_cache()
+    if cached:
+        start_background_sync_if_stale()
+        return cached
     try:
-        response = requests.get(URL, timeout=REQUEST_TIMEOUT)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        text = soup.get_text()
-        lines = [line.strip() for line in text.split("\n") if line.strip()]
-
-        start_idx = None
-        for i, line in enumerate(lines):
-            if line == "Release schedule":
-                start_idx = i + 1
-                break
-
-        if start_idx:
-            i = start_idx
-            while i < len(lines) - 5:
-                line = lines[i]
-                if re.match(r"^\d+\.\d+$", line):
-                    series = line
-                    status = lines[i + 1] if i + 1 < len(lines) else ""
-                    first_release = lines[i + 3] if i + 3 < len(lines) else ""
-                    end_support = lines[i + 4] if i + 4 < len(lines) else ""
-
-                    if not status or status.startswith("Looking for"):
-                        break
-
-                    releases.append(
-                        {
-                            "series": series,
-                            "status": status,
-                            "first_release": first_release,
-                            "end_of_support": end_support,
-                            "latest_version": None,
-                        }
-                    )
-                    i += 6
-                else:
-                    i += 1
-
-        release_links = soup.find_all("span", class_="release-number")
-        series_versions: dict[str, str] = {}
-
-        for release in release_links:
-            link = release.find("a")
-            if link:
-                version_text = link.get_text(strip=True)
-                if version_text.startswith("Python "):
-                    ver = version_text.replace("Python ", "")
-                    if validate_version_string(ver):
-                        parts = ver.split(".")
-                        if len(parts) >= 2:
-                            series = f"{parts[0]}.{parts[1]}"
-                            if series not in series_versions:
-                                series_versions[series] = ver
-
-        for rel in releases:
-            if rel["series"] in series_versions:
-                rel["latest_version"] = series_versions[rel["series"]]
-
-        return releases
-
-    except Exception as e:
-        print(f"Error fetching active releases: {e}")
+        sync_python_org()
+        data = get_releases_from_cache()
+        if data:
+            return data
+    except Exception:
+        pass
+    try:
+        return _fetch_active_python_releases_fallback()
+    except Exception:
         return []
 
 
-def get_available_python_versions(limit: int = 50) -> list[dict[str, str]]:
-    """Fetch all available Python versions from python.org."""
-    URL = "https://www.python.org/downloads/"
-    versions: list[dict[str, str]] = []
+def _fetch_active_python_releases_fallback() -> list[dict[str, Any]]:
+    url = "https://www.python.org/downloads/"
+    releases: list[dict[str, Any]] = []
+    response = requests.get(url, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, "html.parser")
+    text = soup.get_text()
+    lines = [line.strip() for line in text.split("\n") if line.strip()]
+    start_idx = None
+    for i, line in enumerate(lines):
+        if line == "Release schedule":
+            start_idx = i + 1
+            break
+    if start_idx:
+        i = start_idx
+        while i < len(lines) - 5:
+            line = lines[i]
+            if re.match(r"^\d+\.\d+$", line):
+                series = line
+                status = lines[i + 1] if i + 1 < len(lines) else ""
+                first_release = lines[i + 3] if i + 3 < len(lines) else ""
+                end_support = lines[i + 4] if i + 4 < len(lines) else ""
+                if not status or status.startswith("Looking for"):
+                    break
+                releases.append(
+                    {
+                        "series": series,
+                        "status": status,
+                        "first_release": first_release,
+                        "end_of_support": end_support,
+                        "latest_version": None,
+                    }
+                )
+                i += 6
+            else:
+                i += 1
+    release_links = soup.find_all("span", class_="release-number")
+    series_versions: dict[str, str] = {}
+    for release in release_links:
+        link = release.find("a")
+        if link:
+            version_text = link.get_text(strip=True)
+            if version_text.startswith("Python "):
+                ver = version_text.replace("Python ", "")
+                if validate_version_string(ver):
+                    parts = ver.split(".")
+                    if len(parts) >= 2:
+                        series = f"{parts[0]}.{parts[1]}"
+                        series_versions.setdefault(series, ver)
+    for rel in releases:
+        if rel["series"] in series_versions:
+            rel["latest_version"] = series_versions[rel["series"]]
+    return releases
 
+
+def get_available_python_versions(limit: int = 50) -> list[dict[str, str]]:
+    cached = get_versions_from_cache(limit)
+    if cached:
+        start_background_sync_if_stale()
+        return cached
     try:
-        response = requests.get(URL, timeout=REQUEST_TIMEOUT)
+        sync_python_org()
+        data = get_versions_from_cache(limit)
+        if data:
+            return data
+    except Exception:
+        pass
+    try:
+        url = "https://www.python.org/downloads/"
+        versions: list[dict[str, str]] = []
+        response = requests.get(url, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-
         release_links = soup.find_all("span", class_="release-number")
-
         for release in release_links[:limit]:
             link = release.find("a")
             if link:
@@ -332,12 +346,14 @@ def get_available_python_versions(limit: int = 50) -> list[dict[str, str]]:
                 if version_text.startswith("Python "):
                     ver = version_text.replace("Python ", "")
                     if validate_version_string(ver):
-                        versions.append({"version": ver, "url": f"https://www.python.org{link.get('href', '')}"})
-
+                        href_val = link.get("href")
+                        if isinstance(href_val, str):
+                            full = f"https://www.python.org{href_val}" if not href_val.startswith("http") else href_val
+                        else:
+                            full = ""
+                        versions.append({"version": ver, "url": full})
         return versions
-
-    except Exception as e:
-        print(f"Error fetching available versions: {e}")
+    except Exception:
         return []
 
 
@@ -402,3 +418,53 @@ def is_python_version_installed(version_str: str) -> bool:
         pass
 
     return False
+
+
+def _normalize_status(text: str) -> str:
+    t = text.lower()
+    if "pre-release" in t or "pre" in t:
+        return "prerelease"
+    if "bugfix" in t or "active" in t:
+        return "active"
+    if "security" in t:
+        return "security"
+    if "end of life" in t or "eol" in t:
+        return "eol"
+    return t
+
+
+def is_version_security_supported(ver: str) -> bool:
+    try:
+        parts = ver.split(".")
+        if len(parts) < 2:
+            return False
+        series = f"{parts[0]}.{parts[1]}"
+        for rel in get_active_python_releases():
+            if rel.get("series") == series:
+                status = _normalize_status(str(rel.get("status", "")))
+                return status in {"security", "active"}
+        return False
+    except Exception:
+        return False
+
+
+def get_versions_filtered(
+    min_version: str | None = None, security_supported_only: bool = False
+) -> list[dict[str, Any]]:
+    releases = get_active_python_releases()
+    out: list[dict[str, Any]] = []
+    for rel in releases:
+        version = rel.get("latest_version")
+        if not version or not validate_version_string(str(version)):
+            continue
+        if min_version:
+            try:
+                if pkg_version.parse(str(version)) < pkg_version.parse(min_version):
+                    continue
+            except Exception:
+                pass
+        status = _normalize_status(str(rel.get("status", "")))
+        if security_supported_only and status not in {"security", "active"}:
+            continue
+        out.append({"version": str(version), "status": status})
+    return out
