@@ -137,11 +137,13 @@ def check() -> None:
 
 @cli.command()
 @click.argument("version")
+@click.option("--dry-run", is_flag=True, help="Preview installation without changes.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.option("--build-from-source", is_flag=True, help="Compile Python from source (Linux only)")
 @click.option("--installer", "-i", default="auto", help="Preferred installer plugin to use")
 def install(
     version: str,
+    dry_run: bool,
     yes: bool,
     build_from_source: bool = False,
     installer: str = "auto",
@@ -153,6 +155,11 @@ def install(
         pyvm install 3.11.5 --yes
         pyvm install 3.12.1 --installer pyenv
     """
+
+    if dry_run:
+        click.secho(f"[DRY-RUN] Would download and install Python {version}", fg="yellow")
+        return
+
     try:
         if not validate_version_string(version) or len(version.split(".")) < 3:
             click.echo(f"Error: Invalid version format: {version}")
@@ -205,9 +212,15 @@ def install(
 
 @cli.command()
 @click.argument("version")
+@click.option("--dry-run", is_flag=True, help="Preview removal without deleting files.")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
-def remove(version: str, yes: bool) -> None:
+def remove(version: str, dry_run: bool, yes: bool) -> None:
     """Remove a specific Python version."""
+
+    if dry_run:
+        click.secho(f"[DRY-RUN] Would remove Python {version}", fg="yellow")
+        return
+
     try:
         if not validate_version_string(version):
             click.echo(f"Error: Invalid version format: {version}")
