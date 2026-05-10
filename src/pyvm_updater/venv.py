@@ -11,14 +11,15 @@ from pathlib import Path
 from typing import Any
 
 from .logging_config import get_logger
+from .paths import get_venv_dir as _get_venv_dir, get_venv_registry_file
 from .utils import get_os_info
 from .version import get_installed_python_versions
 
 log = get_logger("venv")
 
-# Default venv directory
-DEFAULT_VENV_DIR = Path.home() / ".pyvm" / "venvs"
-VENV_REGISTRY = Path.home() / ".pyvm" / "venvs.json"
+# Default venv directory (XDG_DATA_HOME/pyvm/venvs)
+DEFAULT_VENV_DIR = _get_venv_dir()
+VENV_REGISTRY = get_venv_registry_file()
 
 
 def get_venv_dir() -> Path:

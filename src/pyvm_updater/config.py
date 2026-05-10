@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .paths import get_config_dir, get_config_file as _get_config_file
+
 # Try to import tomllib (Python 3.11+) or fallback to tomli
 try:
     import tomllib
@@ -14,9 +16,9 @@ except ImportError:
     except ImportError:
         tomllib = None  # type: ignore
 
-# Config file location
-CONFIG_DIR = Path.home() / ".config" / "pyvm"
-CONFIG_FILE = CONFIG_DIR / "config.toml"
+# Config file location (XDG-compliant)
+CONFIG_DIR = get_config_dir()
+CONFIG_FILE = _get_config_file()
 
 # Default configuration
 DEFAULT_CONFIG: dict[str, Any] = {
