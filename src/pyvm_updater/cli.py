@@ -12,6 +12,7 @@ from typing import Any
 
 import click
 import requests
+from rich.console import Console
 
 from . import __version__
 from .config import get_config
@@ -122,7 +123,21 @@ def rollback(yes: bool) -> None:
 def check() -> None:
     """Check current Python version against latest stable release."""
     try:
-        _local_ver, _latest_ver, needs_update = check_python_version(silent=False)
+        console = Console()
+        with console.status("Checking for updates..."):
+            _local_ver, _latest_ver, needs_update = check_python_version(silent=True)
+
+        click.echo("\n" + "=" * 40)
+        click.echo("     Python Version Check Report")
+        click.echo("=" * 40)
+        click.echo(f"Your version:   {_local_ver}")
+        click.echo(f"Latest version: {_latest_ver}")
+        click.echo("=" * 40)
+
+        if not needs_update:
+            click.echo("✓ You are up-to-date!")
+        else:
+            click.echo(f"⚠ A new version ({_latest_ver}) is available!")
 
         if needs_update:
             click.echo("\n💡 Tip: Run 'pyvm update' to upgrade Python")
@@ -270,20 +285,21 @@ def remove(version: str, dry_run: bool, yes: bool) -> None:
 def list_versions(show_all: bool) -> None:
     """List available Python versions."""
     try:
-        click.echo("Fetching Python versions...\n")
-
+        console = Console()
         local_ver = platform.python_version()
         local_series = ".".join(local_ver.split(".")[:2])
 
         if show_all:
-            versions = get_available_python_versions(limit=100)
+            with console.status("Fetching all Python versions..."):
+                versions = get_available_python_versions(limit=100)
             if not versions:
                 click.echo("Could not fetch available versions.")
                 sys.exit(1)
 
-            latest_ver, _ = get_latest_python_info_with_retry()
+            with console.status("Fetching latest version info..."):
+                latest_ver, _ = get_latest_python_info_with_retry()
 
-            click.echo(f"{'VERSION':<12} {'STATUS'}")
+            click.echo(f"\n{'VERSION':<12} {'STATUS'}")
             click.echo("-" * 40)
 
             for v in versions:
@@ -295,12 +311,13 @@ def list_versions(show_all: bool) -> None:
                     status = "(latest)"
                 click.echo(f"{ver:<12} {status}")
         else:
-            releases = get_active_python_releases()
+            with console.status("Fetching active releases..."):
+                releases = get_active_python_releases()
             if not releases:
                 click.echo("Could not fetch active releases.")
                 sys.exit(1)
 
-            click.echo(f"{'SERIES':<10} {'LATEST':<12} {'STATUS':<15} {'SUPPORT UNTIL'}")
+            click.echo(f"\n{'SERIES':<10} {'LATEST':<12} {'STATUS':<15} {'SUPPORT UNTIL'}")
             click.echo("-" * 55)
 
             for rel in releases:
@@ -365,8 +382,8 @@ def update(
             click.echo(f"📌 Target version specified: {install_version}")
             click.echo(f"📊 Current version: {local_ver}")
         else:
-            click.echo("🔍 Checking for updates...")
-            local_ver, latest_ver, needs_update = check_python_version(silent=True)
+            with Console().status("Checking for updates..."):
+                local_ver, latest_ver, needs_update = check_python_version(silent=True)
 
             if not latest_ver:
                 click.echo("❌ Could not fetch latest version information.")
