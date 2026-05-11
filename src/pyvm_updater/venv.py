@@ -202,7 +202,7 @@ def create_venv(
                 error_output = e.stderr or e.stdout
                 return (
                     True,
-                    f"{success_msg}\n   ⚠️ Warning: Failed to install requirements from {requirements_file.name}:\n"
+                    f"{success_msg}\n   [!] Warning: Failed to install requirements from {requirements_file.name}:\n"
                     f"{error_output}",
                 )
 
