@@ -691,6 +691,27 @@ def venv_activate(name: str) -> None:
         sys.exit(1)
 
 
+@venv.command("rename")
+@click.argument("old_name")
+@click.argument("new_name")
+def venv_rename(old_name: str, new_name: str) -> None:
+    """Rename a virtual environment.
+
+    Moves the venv folder on disk and updates the internal registry.
+
+    Example: pyvm venv rename old-project new-project
+    """
+    from .venv import rename_venv
+
+    success, message = rename_venv(old_name, new_name)
+
+    if success:
+        click.echo(f"[OK] {message}")
+    else:
+        click.echo(f"[X] {message}")
+        sys.exit(1)
+
+
 @cli.command()
 def doctor():
     """Run a health check of the environment."""

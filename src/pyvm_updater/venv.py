@@ -299,6 +299,60 @@ def remove_venv(name: str, force: bool = False) -> tuple[bool, str]:
         return False, f"Failed to remove venv: {e}"
 
 
+def rename_venv(old_name: str, new_name: str) -> tuple[bool, str]:
+    """Rename a virtual environment on disk and in the registry.
+
+    Args:
+        old_name: Current name of the venv.
+        new_name: Desired new name for the venv.
+
+    Returns:
+        Tuple of (success, message).
+    """
+    registry = get_venv_registry()
+
+    # Resolve old venv path
+    if old_name in registry:
+        old_path = Path(registry[old_name].get("path", ""))
+    else:
+        old_path = get_venv_dir() / old_name
+
+    # Check old venv exists (on disk or in registry)
+    if old_name not in registry and not old_path.exists():
+        return False, f"Venv '{old_name}' not found"
+
+    # Check new name is not taken
+    new_path = get_venv_dir() / new_name
+    if new_name in registry:
+        return False, f"Venv '{new_name}' already exists in registry"
+    if new_path.exists():
+        return False, f"Directory '{new_path}' already exists"
+
+    try:
+        # Move the folder on disk if it exists
+        if old_path.exists():
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(old_path), str(new_path))
+
+        # Update registry
+        if old_name in registry:
+            entry = registry.pop(old_name)
+            entry["path"] = str(new_path)
+            registry[new_name] = entry
+        else:
+            # Unregistered venv on disk, create a registry entry
+            registry[new_name] = {
+                "path": str(new_path),
+                "python_version": "unknown",
+            }
+        save_venv_registry(registry)
+
+        return True, f"Renamed venv '{old_name}' to '{new_name}'"
+
+    except OSError as e:
+        return False, f"Failed to rename venv: {e}"
+
+
 def get_venv_activate_command(name: str) -> str | None:
     """Get the command to activate a venv.
 
