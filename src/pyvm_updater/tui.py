@@ -32,6 +32,7 @@ from .installers import (
     update_python_macos,
     update_python_windows,
 )
+from .config import get_config
 from .utils import get_os_info
 from .version import check_python_version, get_active_python_releases, get_installed_python_versions
 from .wizard import WizardScreen
@@ -153,6 +154,7 @@ class MainScreen(Screen):
         Binding("u", "update_latest", "Update"),
         Binding("b", "rollback", "Rollback"),
         Binding("w", "start_wizard", "Wizard"),
+        Binding("t", "toggle_theme", "Theme"),
         Binding("1", "focus_installed", "Installed", show=False),
         Binding("2", "focus_available", "Available", show=False),
         Binding("?", "help", "Help"),
@@ -300,7 +302,7 @@ class MainScreen(Screen):
 
             yield Static(
                 "[dim]Tab: switch panels | Arrow keys: navigate | Enter: install | X: remove | "
-                "R: refresh | U: update | B: rollback | Q: quit[/dim]",
+                "R: refresh | U: update | B: rollback | T: theme | Q: quit[/dim]",
                 id="hint-bar",
             )
 
@@ -799,6 +801,22 @@ class MainScreen(Screen):
 
         self.refresh_all()
 
+    def action_toggle_theme(self) -> None:
+        """Cycle through all available TUI themes."""
+        themes = sorted(self.app.available_themes.keys())
+        current = self.app.theme
+        try:
+            idx = themes.index(current)
+            next_theme = themes[(idx + 1) % len(themes)]
+        except ValueError:
+            next_theme = themes[0]
+        self.app.theme = next_theme
+        cfg = get_config()
+        cfg.set("tui", "theme", next_theme)
+        cfg.save()
+        status_bar = self.query_one("#status-bar", StatusBar)
+        status_bar.set_message(f"Theme: {next_theme}", "green")
+
     def action_quit(self) -> None:
         self.app.exit()
 
@@ -934,6 +952,7 @@ class HelpScreen(Screen):
   R         Refresh data
   U         Update to latest version
   W         Install wizard
+  T         Toggle theme (dark/light)
   B         Rollback last action
   ?         This help
   Q         Quit
@@ -972,6 +991,16 @@ class PyvmTUI(App):
     }
 
     def on_mount(self) -> None:
+        # Apply saved theme preference from config
+        cfg = get_config()
+        saved = cfg.tui_theme
+        # Support legacy "dark"/"light" values from older configs
+        if saved == "dark":
+            saved = "textual-dark"
+        elif saved == "light":
+            saved = "textual-light"
+        if saved in self.available_themes:
+            self.theme = saved
         self.push_screen("main")
 
 
