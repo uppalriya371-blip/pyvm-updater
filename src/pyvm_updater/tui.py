@@ -952,7 +952,7 @@ class HelpScreen(Screen):
   R         Refresh data
   U         Update to latest version
   W         Install wizard
-  T         Toggle theme (dark/light)
+  T         Toggle theme
   B         Rollback last action
   ?         This help
   Q         Quit
