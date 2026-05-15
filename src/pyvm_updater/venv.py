@@ -11,7 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from .logging_config import get_logger
-from .paths import get_venv_dir as _get_venv_dir, get_venv_registry_file
+from .paths import get_venv_dir as _get_venv_dir
+from .paths import get_venv_registry_file
 from .utils import get_os_info
 from .version import get_installed_python_versions
 

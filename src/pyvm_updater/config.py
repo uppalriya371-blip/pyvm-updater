@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-from .paths import get_config_dir, get_config_file as _get_config_file
+from .paths import get_config_dir
+from .paths import get_config_file as _get_config_file
 
 # Try to import tomllib (Python 3.11+) or fallback to tomli
 try:

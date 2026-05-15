@@ -1,6 +1,5 @@
 """Tests for pyvm_updater.paths module."""
 
-import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,7 +8,6 @@ import pytest
 from pyvm_updater.paths import (
     get_cache_dir,
     get_config_dir,
-    get_config_file,
     get_data_dir,
     get_history_file,
     get_metadata_db,
@@ -26,7 +24,7 @@ class TestXDGPaths:
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_config_dir_default(self, mock_win):
         """Test default config dir on Linux/macOS."""
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_config_dir()
             assert result == Path.home() / ".config" / "pyvm"
 
@@ -40,7 +38,7 @@ class TestXDGPaths:
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_data_dir_default(self, mock_win):
         """Test default data dir on Linux/macOS."""
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_data_dir()
             assert result == Path.home() / ".local" / "share" / "pyvm"
 
@@ -54,7 +52,7 @@ class TestXDGPaths:
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_cache_dir_default(self, mock_win):
         """Test default cache dir on Linux/macOS."""
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_cache_dir()
             assert result == Path.home() / ".cache" / "pyvm"
 
@@ -82,33 +80,33 @@ class TestConcreteFilePaths:
 
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_history_file(self, mock_win):
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_history_file()
             assert result.name == "history.json"
             assert "pyvm" in str(result)
 
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_metadata_db(self, mock_win):
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_metadata_db()
             assert result.name == "metadata.sqlite"
             assert ".cache" in str(result)
 
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_venv_dir(self, mock_win):
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_venv_dir()
             assert result.name == "venvs"
 
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_venv_registry(self, mock_win):
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_venv_registry_file()
             assert result.name == "venvs.json"
 
     @patch("pyvm_updater.paths._is_windows", return_value=False)
     def test_plugins_dir(self, mock_win):
-        with patch.dict("os.environ", {}, clear=True):
+        with patch.dict("os.environ", {"HOME": "/home/test", "USERPROFILE": "C:\\Users\\Test"}, clear=True):
             result = get_plugins_dir()
             assert result.name == "plugins"
             assert ".config" in str(result)
@@ -159,16 +157,21 @@ class TestMigration:
             with patch("pyvm_updater.paths.get_cache_dir", return_value=env["cache_dir"]):
                 with patch("pyvm_updater.paths.get_history_file", return_value=env["data_dir"] / "history.json"):
                     with patch("pyvm_updater.paths.get_metadata_db", return_value=env["cache_dir"] / "metadata.sqlite"):
-                        with patch("pyvm_updater.paths.get_venv_registry_file", return_value=env["data_dir"] / "venvs.json"):
+                        with patch(
+                            "pyvm_updater.paths.get_venv_registry_file", return_value=env["data_dir"] / "venvs.json"
+                        ):
                             with patch("pyvm_updater.paths.get_venv_dir", return_value=env["data_dir"] / "venvs"):
-                                with patch("pyvm_updater.paths._LEGACY_PATHS", {
-                                    "history": env["legacy_history"],
-                                    "metadata": env["legacy_metadata"],
-                                    "venv_dir": env["legacy_pyvm"] / "venvs",
-                                    "venv_registry": env["legacy_pyvm"] / "venvs.json",
-                                    "config_dir": env["home"] / ".config" / "pyvm",
-                                    "config_file": env["home"] / ".config" / "pyvm" / "config.toml",
-                                }):
+                                with patch(
+                                    "pyvm_updater.paths._LEGACY_PATHS",
+                                    {
+                                        "history": env["legacy_history"],
+                                        "metadata": env["legacy_metadata"],
+                                        "venv_dir": env["legacy_pyvm"] / "venvs",
+                                        "venv_registry": env["legacy_pyvm"] / "venvs.json",
+                                        "config_dir": env["home"] / ".config" / "pyvm",
+                                        "config_file": env["home"] / ".config" / "pyvm" / "config.toml",
+                                    },
+                                ):
                                     with patch("pyvm_updater.paths._migration_done", return_value=False):
                                         with patch("pyvm_updater.paths._mark_migration_done"):
                                             migrate_legacy_paths()
@@ -199,14 +202,17 @@ class TestMigration:
         data_dir = tmp_path / "data" / "pyvm"
 
         with patch("pyvm_updater.paths.get_data_dir", return_value=data_dir):
-            with patch("pyvm_updater.paths._LEGACY_PATHS", {
-                "history": tmp_path / "nonexistent.json",
-                "metadata": tmp_path / "nonexistent.sqlite",
-                "venv_dir": tmp_path / "nonexistent_dir",
-                "venv_registry": tmp_path / "nonexistent_registry.json",
-                "config_dir": tmp_path / "nonexistent_config",
-                "config_file": tmp_path / "nonexistent_config" / "config.toml",
-            }):
+            with patch(
+                "pyvm_updater.paths._LEGACY_PATHS",
+                {
+                    "history": tmp_path / "nonexistent.json",
+                    "metadata": tmp_path / "nonexistent.sqlite",
+                    "venv_dir": tmp_path / "nonexistent_dir",
+                    "venv_registry": tmp_path / "nonexistent_registry.json",
+                    "config_dir": tmp_path / "nonexistent_config",
+                    "config_file": tmp_path / "nonexistent_config" / "config.toml",
+                },
+            ):
                 with patch("pyvm_updater.paths._migration_done", return_value=False):
                     with patch("pyvm_updater.paths._mark_migration_done"):
                         # Should not raise
