@@ -803,17 +803,25 @@ class MainScreen(Screen):
 
     def action_toggle_theme(self) -> None:
         """Cycle through all available TUI themes."""
-        themes = sorted(self.app.available_themes.keys())
-        current = self.app.theme
-        try:
-            idx = themes.index(current)
-            next_theme = themes[(idx + 1) % len(themes)]
-        except ValueError:
-            next_theme = themes[0]
-        self.app.theme = next_theme
         cfg = get_config()
+        next_theme = "dark"
+
+        if hasattr(self.app, "available_themes") and hasattr(self.app, "theme"):
+            themes = sorted(self.app.available_themes.keys())
+            current = self.app.theme
+            try:
+                idx = themes.index(current)
+                next_theme = themes[(idx + 1) % len(themes)]
+            except ValueError:
+                next_theme = themes[0] if themes else "textual-dark"
+            self.app.theme = next_theme
+        elif hasattr(self.app, "dark"):
+            self.app.dark = not self.app.dark
+            next_theme = "dark" if self.app.dark else "light"
+
         cfg.set("tui", "theme", next_theme)
         cfg.save()
+
         status_bar = self.query_one("#status-bar", StatusBar)
         status_bar.set_message(f"Theme: {next_theme}", "green")
 
@@ -994,13 +1002,23 @@ class PyvmTUI(App):
         # Apply saved theme preference from config
         cfg = get_config()
         saved = cfg.tui_theme
-        # Support legacy "dark"/"light" values from older configs
-        if saved == "dark":
-            saved = "textual-dark"
-        elif saved == "light":
-            saved = "textual-light"
-        if saved in self.available_themes:
-            self.theme = saved
+
+        # Support new API
+        if hasattr(self, "available_themes") and hasattr(self, "theme"):
+            # Support legacy "dark"/"light" values from older configs
+            if saved == "dark":
+                saved = "textual-dark"
+            elif saved == "light":
+                saved = "textual-light"
+            if saved in self.available_themes:
+                self.theme = saved
+        # Support old API
+        elif hasattr(self, "dark"):
+            if saved in ("light", "textual-light"):
+                self.dark = False
+            elif saved in ("dark", "textual-dark"):
+                self.dark = True
+
         self.push_screen("main")
 
 
