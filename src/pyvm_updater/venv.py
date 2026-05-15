@@ -313,24 +313,33 @@ def _fix_venv_paths(venv_path: Path, old_path: Path) -> None:
     cfg = venv_path / "pyvenv.cfg"
     if cfg.exists():
         try:
-            t = cfg.read_text()
-            cfg.write_text(t.replace(old_str, new_str))
+            t = cfg.read_text(encoding="utf-8")
+            cfg.write_text(t.replace(old_str, new_str), encoding="utf-8")
         except OSError:
             pass
 
-    # Fix activate scripts
-    script_paths = [
-        venv_path / "bin" / "activate",
-        venv_path / "bin" / "activate.csh",
-        venv_path / "bin" / "activate.fish",
-        venv_path / "Scripts" / "activate.bat",
-        venv_path / "Scripts" / "Activate.ps1",
-    ]
-    for script in script_paths:
-        if script.exists():
+    # Fix all scripts in bin/Scripts (activation scripts, pip, wrappers, etc.)
+    for scripts_dir in [venv_path / "bin", venv_path / "Scripts"]:
+        if not scripts_dir.exists():
+            continue
+
+        for script in scripts_dir.iterdir():
+            if not script.is_file():
+                continue
+
             try:
-                t = script.read_text()
-                script.write_text(t.replace(old_str, new_str))
+                # Try to process as text first (for shell scripts, .bat, .ps1, python scripts)
+                try:
+                    t = script.read_text(encoding="utf-8")
+                    if old_str in t:
+                        script.write_text(t.replace(old_str, new_str), encoding="utf-8")
+                except UnicodeDecodeError:
+                    # Fallback for binary wrappers (e.g. pip.exe launcher)
+                    b = script.read_bytes()
+                    old_bytes = old_str.encode("utf-8")
+                    new_bytes = new_str.encode("utf-8")
+                    if old_bytes in b:
+                        script.write_bytes(b.replace(old_bytes, new_bytes))
             except OSError:
                 pass
 

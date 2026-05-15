@@ -152,6 +152,41 @@ class TestDuplicateVenv:
         assert str(venvs / "clone") in text
         assert str(venvs / "original") not in text
 
+    def test_duplicate_fixes_script_wrappers(self, venv_dir):
+        """Scripts like pip should have their shebang/path updated."""
+        venvs, registry_file = venv_dir
+        source_path = _make_fake_venv(venvs, "original")
+
+        # Make a fake pip script
+        bin_dir = source_path / "bin"
+        pip_script = bin_dir / "pip"
+        pip_script.write_text(f"#!{source_path}/bin/python\nprint('pip')")
+
+        # Make a fake binary executable (like pip.exe)
+        pip_exe = bin_dir / "pip.exe"
+        old_bytes = str(source_path).encode("utf-8")
+        pip_exe.write_bytes(b"PK\x03\x04" + old_bytes + b"\x00\x01")
+
+        registry = {
+            "original": {"path": str(source_path), "python_version": "3.13"},
+        }
+        registry_file.write_text(json.dumps(registry))
+
+        patches = _patch_venv(venvs, registry_file)
+        p1, p2 = _apply_patches(patches)
+        with p1, p2:
+            success, msg = duplicate_venv("original", "clone")
+
+        assert success is True
+
+        new_pip = venvs / "clone" / "bin" / "pip"
+        assert str(venvs / "clone") in new_pip.read_text()
+        assert str(venvs / "original") not in new_pip.read_text()
+
+        new_pip_exe = venvs / "clone" / "bin" / "pip.exe"
+        assert str(venvs / "clone").encode("utf-8") in new_pip_exe.read_bytes()
+        assert str(venvs / "original").encode("utf-8") not in new_pip_exe.read_bytes()
+
     def test_duplicate_unregistered_venv(self, venv_dir):
         """Venv on disk but not in registry should still be duplicated."""
         venvs, registry_file = venv_dir
