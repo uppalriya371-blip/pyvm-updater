@@ -22,6 +22,7 @@ except ImportError:
     sys.exit(1)
 
 # Import from new modular structure
+from .config import get_config
 from .constants import HISTORY_FILE
 from .history import HistoryManager
 from .installers import (
@@ -32,7 +33,6 @@ from .installers import (
     update_python_macos,
     update_python_windows,
 )
-from .config import get_config
 from .utils import get_os_info
 from .version import check_python_version, get_active_python_releases, get_installed_python_versions
 from .wizard import WizardScreen
