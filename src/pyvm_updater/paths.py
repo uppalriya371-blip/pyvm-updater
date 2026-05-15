@@ -118,23 +118,29 @@ def _mark_migration_done() -> None:
 
 
 def _move_file(src: Path, dst: Path) -> bool:
-    """Move a single file from src to dst. Returns True on success."""
+    """Move a single file from src to dst. Returns True if src is successfully moved and no longer exists."""
     if not src.exists():
-        return False
+        return True
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(src), str(dst))
-        log.info(f"Migrated {src} -> {dst}")
-        return True
+        if not dst.exists():
+            shutil.move(str(src), str(dst))
+            log.info(f"Migrated {src} -> {dst}")
+        else:
+            # If destination already exists, we prefer it but we must remove the legacy source
+            # to prevent partial migration state. We log that we skipped overwriting.
+            log.info(f"Destination {dst} already exists, skipping move. Removing legacy {src}.")
+            src.unlink()
+        return not src.exists()
     except (OSError, shutil.Error) as e:
         log.warning(f"Failed to migrate {src} -> {dst}: {e}")
         return False
 
 
 def _move_directory(src: Path, dst: Path) -> bool:
-    """Move a directory tree from src to dst. Returns True on success."""
+    """Move a directory tree from src to dst. Returns True if src is successfully moved and no longer exists."""
     if not src.exists() or not src.is_dir():
-        return False
+        return True
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists():
@@ -147,7 +153,7 @@ def _move_directory(src: Path, dst: Path) -> bool:
         else:
             shutil.move(str(src), str(dst))
         log.info(f"Migrated {src} -> {dst}")
-        return True
+        return not src.exists()
     except (OSError, shutil.Error) as e:
         log.warning(f"Failed to migrate {src} -> {dst}: {e}")
         return False
@@ -163,30 +169,39 @@ def migrate_legacy_paths() -> None:
     if _migration_done():
         return
 
+    success = True
     migrated_any = False
 
     # History file
     old_history = _LEGACY_PATHS["history"]
     if old_history.exists():
-        if _move_file(old_history, get_history_file()):
+        if not _move_file(old_history, get_history_file()):
+            success = False
+        else:
             migrated_any = True
 
     # Metadata cache
     old_metadata = _LEGACY_PATHS["metadata"]
     if old_metadata.exists():
-        if _move_file(old_metadata, get_metadata_db()):
+        if not _move_file(old_metadata, get_metadata_db()):
+            success = False
+        else:
             migrated_any = True
 
     # Venv registry
     old_registry = _LEGACY_PATHS["venv_registry"]
     if old_registry.exists():
-        if _move_file(old_registry, get_venv_registry_file()):
+        if not _move_file(old_registry, get_venv_registry_file()):
+            success = False
+        else:
             migrated_any = True
 
     # Venv directory
     old_venv_dir = _LEGACY_PATHS["venv_dir"]
     if old_venv_dir.exists() and old_venv_dir.is_dir():
-        if _move_directory(old_venv_dir, get_venv_dir()):
+        if not _move_directory(old_venv_dir, get_venv_dir()):
+            success = False
+        else:
             migrated_any = True
 
     # Clean up empty ~/.pyvm directory if it's now empty
@@ -201,7 +216,8 @@ def migrate_legacy_paths() -> None:
     if migrated_any:
         log.info("Legacy file migration complete.")
 
-    _mark_migration_done()
+    if success:
+        _mark_migration_done()
 
 
 def ensure_directories() -> None:
