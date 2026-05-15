@@ -46,6 +46,7 @@ def save_venv_registry(registry: dict[str, Any]) -> None:
             json.dump(registry, f, indent=2)
     except OSError as e:
         log.warning(f"Could not save venv registry: {e}")
+        raise
 
 
 def find_python_executable(version: str) -> str | None:
@@ -299,6 +300,46 @@ def remove_venv(name: str, force: bool = False) -> tuple[bool, str]:
         return False, f"Failed to remove venv: {e}"
 
 
+def _fix_venv_paths(venv_path: Path, old_path: Path) -> None:
+    """Fix hardcoded paths inside a venv so it points to its new location."""
+    old_str = str(old_path)
+    new_str = str(venv_path)
+
+    # Fix pyvenv.cfg
+    cfg = venv_path / "pyvenv.cfg"
+    if cfg.exists():
+        try:
+            t = cfg.read_text(encoding="utf-8")
+            cfg.write_text(t.replace(old_str, new_str), encoding="utf-8")
+        except OSError:
+            pass
+
+    # Fix all scripts in bin/Scripts (activation scripts, pip, wrappers, etc.)
+    for scripts_dir in [venv_path / "bin", venv_path / "Scripts"]:
+        if not scripts_dir.exists():
+            continue
+
+        for script in scripts_dir.iterdir():
+            if not script.is_file():
+                continue
+
+            try:
+                # Try to process as text first
+                try:
+                    t = script.read_text(encoding="utf-8")
+                    if old_str in t:
+                        script.write_text(t.replace(old_str, new_str), encoding="utf-8")
+                except UnicodeDecodeError:
+                    # Fallback for binary wrappers
+                    b = script.read_bytes()
+                    old_bytes = old_str.encode("utf-8")
+                    new_bytes = new_str.encode("utf-8")
+                    if old_bytes in b:
+                        script.write_bytes(b.replace(old_bytes, new_bytes))
+            except OSError:
+                pass
+
+
 def rename_venv(old_name: str, new_name: str) -> tuple[bool, str]:
     """Rename a virtual environment on disk and in the registry.
 
@@ -322,17 +363,20 @@ def rename_venv(old_name: str, new_name: str) -> tuple[bool, str]:
         return False, f"Venv '{old_name}' not found"
 
     # Check new name is not taken
-    new_path = get_venv_dir() / new_name
+    new_path = old_path.parent / new_name
     if new_name in registry:
         return False, f"Venv '{new_name}' already exists in registry"
     if new_path.exists():
         return False, f"Directory '{new_path}' already exists"
 
+    disk_moved = False
     try:
         # Move the folder on disk if it exists
         if old_path.exists():
             new_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(old_path), str(new_path))
+            disk_moved = True
+            _fix_venv_paths(new_path, old_path)
 
         # Update registry
         if old_name in registry:
@@ -345,7 +389,15 @@ def rename_venv(old_name: str, new_name: str) -> tuple[bool, str]:
                 "path": str(new_path),
                 "python_version": "unknown",
             }
-        save_venv_registry(registry)
+
+        try:
+            save_venv_registry(registry)
+        except OSError as e:
+            # Rollback disk rename
+            if disk_moved:
+                shutil.move(str(new_path), str(old_path))
+                _fix_venv_paths(old_path, new_path)
+            return False, f"Failed to save registry, rename rolled back: {e}"
 
         return True, f"Renamed venv '{old_name}' to '{new_name}'"
 
