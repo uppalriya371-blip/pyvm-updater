@@ -1,12 +1,11 @@
 """Tests for pyvm venv duplicate command."""
 
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from pyvm_updater.venv import duplicate_venv, _fix_venv_paths
+from pyvm_updater.venv import _fix_venv_paths, duplicate_venv
 
 
 @pytest.fixture
@@ -30,7 +29,7 @@ def _make_fake_venv(venv_dir, name):
 
     # Create pyvenv.cfg
     cfg = venv_path / "pyvenv.cfg"
-    cfg.write_text(f"home = /usr/bin\ninclude-system-site-packages = false\n")
+    cfg.write_text("home = /usr/bin\ninclude-system-site-packages = false\n")
 
     return venv_path
 
