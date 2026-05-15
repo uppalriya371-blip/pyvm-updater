@@ -1,7 +1,6 @@
 """Tests for pyvm venv rename command."""
 
 import json
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -50,8 +49,10 @@ class TestRenameVenv:
         registry_file.write_text(json.dumps(registry))
 
         patches = _patch_venv(venvs, registry_file)
-        with patch(list(patches.keys())[0], patches[list(patches.keys())[0]]), \
-             patch(list(patches.keys())[1], patches[list(patches.keys())[1]]):
+        with (
+            patch(list(patches.keys())[0], patches[list(patches.keys())[0]]),
+            patch(list(patches.keys())[1], patches[list(patches.keys())[1]]),
+        ):
             success, msg = rename_venv("old-project", "new-project")
 
         assert success is True
@@ -73,8 +74,10 @@ class TestRenameVenv:
         registry_file.write_text("{}")
 
         patches = _patch_venv(venvs, registry_file)
-        with patch(list(patches.keys())[0], patches[list(patches.keys())[0]]), \
-             patch(list(patches.keys())[1], patches[list(patches.keys())[1]]):
+        with (
+            patch(list(patches.keys())[0], patches[list(patches.keys())[0]]),
+            patch(list(patches.keys())[1], patches[list(patches.keys())[1]]),
+        ):
             success, msg = rename_venv("ghost", "new-name")
 
         assert success is False
@@ -91,8 +94,10 @@ class TestRenameVenv:
         registry_file.write_text(json.dumps(registry))
 
         patches = _patch_venv(venvs, registry_file)
-        with patch(list(patches.keys())[0], patches[list(patches.keys())[0]]), \
-             patch(list(patches.keys())[1], patches[list(patches.keys())[1]]):
+        with (
+            patch(list(patches.keys())[0], patches[list(patches.keys())[0]]),
+            patch(list(patches.keys())[1], patches[list(patches.keys())[1]]),
+        ):
             success, msg = rename_venv("aaa", "bbb")
 
         assert success is False
@@ -107,8 +112,10 @@ class TestRenameVenv:
         registry_file.write_text(json.dumps(registry))
 
         patches = _patch_venv(venvs, registry_file)
-        with patch(list(patches.keys())[0], patches[list(patches.keys())[0]]), \
-             patch(list(patches.keys())[1], patches[list(patches.keys())[1]]):
+        with (
+            patch(list(patches.keys())[0], patches[list(patches.keys())[0]]),
+            patch(list(patches.keys())[1], patches[list(patches.keys())[1]]),
+        ):
             success, msg = rename_venv("aaa", "bbb")
 
         assert success is False
@@ -124,8 +131,10 @@ class TestRenameVenv:
         registry_file.write_text(json.dumps(registry))
 
         patches = _patch_venv(venvs, registry_file)
-        with patch(list(patches.keys())[0], patches[list(patches.keys())[0]]), \
-             patch(list(patches.keys())[1], patches[list(patches.keys())[1]]):
+        with (
+            patch(list(patches.keys())[0], patches[list(patches.keys())[0]]),
+            patch(list(patches.keys())[1], patches[list(patches.keys())[1]]),
+        ):
             success, msg = rename_venv("stale", "fresh")
 
         assert success is True
@@ -140,8 +149,10 @@ class TestRenameVenv:
         registry_file.write_text("{}")
 
         patches = _patch_venv(venvs, registry_file)
-        with patch(list(patches.keys())[0], patches[list(patches.keys())[0]]), \
-             patch(list(patches.keys())[1], patches[list(patches.keys())[1]]):
+        with (
+            patch(list(patches.keys())[0], patches[list(patches.keys())[0]]),
+            patch(list(patches.keys())[1], patches[list(patches.keys())[1]]),
+        ):
             success, msg = rename_venv("orphan", "adopted")
 
         assert success is True
