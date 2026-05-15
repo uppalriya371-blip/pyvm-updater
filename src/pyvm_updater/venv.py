@@ -299,6 +299,109 @@ def remove_venv(name: str, force: bool = False) -> tuple[bool, str]:
         return False, f"Failed to remove venv: {e}"
 
 
+def _fix_venv_paths(venv_path: Path, old_path: Path) -> None:
+    """Fix hardcoded paths inside a copied venv so it points to its new location.
+
+    Args:
+        venv_path: The new venv directory.
+        old_path: The original venv directory that was copied.
+    """
+    old_str = str(old_path)
+    new_str = str(venv_path)
+
+    # Fix pyvenv.cfg
+    cfg = venv_path / "pyvenv.cfg"
+    if cfg.exists():
+        try:
+            t = cfg.read_text(encoding="utf-8")
+            cfg.write_text(t.replace(old_str, new_str), encoding="utf-8")
+        except OSError:
+            pass
+
+    # Fix all scripts in bin/Scripts (activation scripts, pip, wrappers, etc.)
+    for scripts_dir in [venv_path / "bin", venv_path / "Scripts"]:
+        if not scripts_dir.exists():
+            continue
+
+        for script in scripts_dir.iterdir():
+            if not script.is_file():
+                continue
+
+            try:
+                # Try to process as text first (for shell scripts, .bat, .ps1, python scripts)
+                try:
+                    t = script.read_text(encoding="utf-8")
+                    if old_str in t:
+                        script.write_text(t.replace(old_str, new_str), encoding="utf-8")
+                except UnicodeDecodeError:
+                    # Fallback for binary wrappers (e.g. pip.exe launcher)
+                    b = script.read_bytes()
+                    old_bytes = old_str.encode("utf-8")
+                    new_bytes = new_str.encode("utf-8")
+                    if old_bytes in b:
+                        script.write_bytes(b.replace(old_bytes, new_bytes))
+            except OSError:
+                pass
+
+
+def duplicate_venv(source_name: str, new_name: str) -> tuple[bool, str]:
+    """Duplicate a virtual environment by copying it to a new name.
+
+    Copies the venv folder on disk, fixes internal paths, and registers
+    the new venv in the JSON registry.
+
+    Args:
+        source_name: Name of the existing venv to copy.
+        new_name: Name for the new copy.
+
+    Returns:
+        Tuple of (success, message).
+    """
+    registry = get_venv_registry()
+
+    # Resolve source path
+    if source_name in registry:
+        source_path = Path(registry[source_name].get("path", ""))
+    else:
+        source_path = get_venv_dir() / source_name
+
+    # Validate source exists on disk
+    if not source_path.exists():
+        return False, f"Venv '{source_name}' not found on disk"
+
+    # Validate new name is not taken
+    new_path = get_venv_dir() / new_name
+    if new_name in registry:
+        return False, f"Venv '{new_name}' already exists in registry"
+    if new_path.exists():
+        return False, f"Directory '{new_path}' already exists"
+
+    try:
+        # Copy the entire venv directory
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(str(source_path), str(new_path))
+
+        # Fix hardcoded paths in the copy
+        _fix_venv_paths(new_path, source_path)
+
+        # Register the new venv
+        if source_name in registry:
+            entry = dict(registry[source_name])
+        else:
+            entry = {"python_version": "unknown"}
+        entry["path"] = str(new_path)
+        registry[new_name] = entry
+        save_venv_registry(registry)
+
+        return True, f"Duplicated venv '{source_name}' as '{new_name}'"
+
+    except OSError as e:
+        # Clean up partial copy if it exists
+        if new_path.exists():
+            shutil.rmtree(new_path, ignore_errors=True)
+        return False, f"Failed to duplicate venv: {e}"
+
+
 def get_venv_activate_command(name: str) -> str | None:
     """Get the command to activate a venv.
 

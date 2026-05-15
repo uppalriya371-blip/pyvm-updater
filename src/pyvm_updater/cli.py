@@ -691,6 +691,28 @@ def venv_activate(name: str) -> None:
         sys.exit(1)
 
 
+@venv.command("duplicate")
+@click.argument("source_name")
+@click.argument("new_name")
+def venv_duplicate(source_name: str, new_name: str) -> None:
+    """Duplicate a virtual environment.
+
+    Copies the venv folder and fixes internal paths so the clone works
+    independently of the original.
+
+    Example: pyvm venv duplicate base-env experimental-env
+    """
+    from .venv import duplicate_venv
+
+    success, message = duplicate_venv(source_name, new_name)
+
+    if success:
+        click.echo(f"[OK] {message}")
+    else:
+        click.echo(f"[X] {message}")
+        sys.exit(1)
+
+
 @cli.command()
 def doctor():
     """Run a health check of the environment."""
