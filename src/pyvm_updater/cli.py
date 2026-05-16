@@ -119,10 +119,20 @@ def rollback(yes: bool) -> None:
 
 
 @cli.command()
-def check() -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
+def check(output_json: bool) -> None:
     """Check current Python version against latest stable release."""
     try:
-        _local_ver, _latest_ver, needs_update = check_python_version(silent=False)
+        _local_ver, _latest_ver, needs_update = check_python_version(silent=output_json)
+
+        if output_json:
+            data = {
+                "local_version": _local_ver,
+                "latest_version": _latest_ver,
+                "update_available": needs_update,
+            }
+            click.echo(json.dumps(data, indent=2))
+            sys.exit(0)
 
         if needs_update:
             click.echo("\n💡 Tip: Run 'pyvm update' to upgrade Python")
@@ -267,10 +277,12 @@ def remove(version: str, dry_run: bool, yes: bool) -> None:
     is_flag=True,
     help="Show all versions including patch releases",
 )
-def list_versions(show_all: bool) -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
+def list_versions(show_all: bool, output_json: bool) -> None:
     """List available Python versions."""
     try:
-        click.echo("Fetching Python versions...\n")
+        if not output_json:
+            click.echo("Fetching Python versions...\n")
 
         local_ver = platform.python_version()
         local_series = ".".join(local_ver.split(".")[:2])
@@ -278,10 +290,29 @@ def list_versions(show_all: bool) -> None:
         if show_all:
             versions = get_available_python_versions(limit=100)
             if not versions:
-                click.echo("Could not fetch available versions.")
+                if output_json:
+                    click.echo(json.dumps({"error": "Could not fetch available versions."}, indent=2))
+                else:
+                    click.echo("Could not fetch available versions.")
                 sys.exit(1)
 
             latest_ver, _ = get_latest_python_info_with_retry()
+
+            if output_json:
+                data = {
+                    "local_version": local_ver,
+                    "latest_version": latest_ver,
+                    "versions": [
+                        {
+                            "version": v["version"],
+                            "installed": v["version"] == local_ver,
+                            "latest": latest_ver and v["version"] == latest_ver,
+                        }
+                        for v in versions
+                    ],
+                }
+                click.echo(json.dumps(data, indent=2))
+                return
 
             click.echo(f"{'VERSION':<12} {'STATUS'}")
             click.echo("-" * 40)
@@ -297,8 +328,28 @@ def list_versions(show_all: bool) -> None:
         else:
             releases = get_active_python_releases()
             if not releases:
-                click.echo("Could not fetch active releases.")
+                if output_json:
+                    click.echo(json.dumps({"error": "Could not fetch active releases."}, indent=2))
+                else:
+                    click.echo("Could not fetch active releases.")
                 sys.exit(1)
+
+            if output_json:
+                data = {
+                    "local_version": local_ver,
+                    "releases": [
+                        {
+                            "series": rel["series"],
+                            "latest_version": rel.get("latest_version"),
+                            "status": rel.get("status", ""),
+                            "end_of_support": rel.get("end_of_support", ""),
+                            "installed": rel["series"] == local_series,
+                        }
+                        for rel in releases
+                    ],
+                }
+                click.echo(json.dumps(data, indent=2))
+                return
 
             click.echo(f"{'SERIES':<10} {'LATEST':<12} {'STATUS':<15} {'SUPPORT UNTIL'}")
             click.echo("-" * 55)
@@ -431,30 +482,47 @@ def tui() -> None:
 
 
 @cli.command()
-def info() -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
+def info(output_json: bool) -> None:
     """Show detailed system and Python information."""
     try:
-        click.echo("=" * 50)
-        click.echo("           System Information")
-        click.echo("=" * 50)
-
         os_name, arch = get_os_info()
-        click.echo(f"Operating System: {os_name.title()}")
-        click.echo(f"Architecture:     {arch}")
-        click.echo(f"Python Version:   {platform.python_version()}")
-        click.echo(f"Python Path:      {sys.executable}")
-        click.echo(f"Platform:         {platform.platform()}")
-        click.echo(f"\nAdmin/Sudo:       {'Yes' if is_admin() else 'No'}")
 
+        info_data = {
+            "os": os_name,
+            "architecture": arch,
+            "python_version": platform.python_version(),
+            "python_path": sys.executable,
+            "platform": platform.platform(),
+            "admin": is_admin(),
+        }
+
+        # Try to find python3 path
         try:
-            result = subprocess.run(["which", "python3"], capture_output=True, text=True, check=False)
+            which_cmd = "where" if os_name == "windows" else "which"
+            result = subprocess.run([which_cmd, "python3"], capture_output=True, text=True, check=False)
             if result.returncode == 0:
-                python3_path = result.stdout.strip()
+                python3_path = result.stdout.strip().split("\n")[0]
                 if python3_path != sys.executable:
-                    click.echo(f"python3 command:  {python3_path}")
+                    info_data["python3_path"] = python3_path
         except Exception:
             pass
 
+        if output_json:
+            click.echo(json.dumps(info_data, indent=2))
+            return
+
+        click.echo("=" * 50)
+        click.echo("           System Information")
+        click.echo("=" * 50)
+        click.echo(f"Operating System: {os_name.title()}")
+        click.echo(f"Architecture:     {arch}")
+        click.echo(f"Python Version:   {info_data['python_version']}")
+        click.echo(f"Python Path:      {info_data['python_path']}")
+        click.echo(f"Platform:         {info_data['platform']}")
+        click.echo(f"\nAdmin/Sudo:       {'Yes' if info_data['admin'] else 'No'}")
+        if "python3_path" in info_data:
+            click.echo(f"python3 command:  {info_data['python3_path']}")
         click.echo("=" * 50)
 
     except Exception as e:
