@@ -362,6 +362,11 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 Shreyas Mene
 
+## Contributors
+
+<!-- CONTRIBUTORS_START -->
+<!-- CONTRIBUTORS_END -->
+
 ## Disclaimer
 
 This tool downloads and installs software from python.org. Always verify the authenticity of downloaded files. The authors are not responsible for any issues arising from Python installations.
