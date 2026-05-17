@@ -292,6 +292,20 @@ def remove(version: str, dry_run: bool, yes: bool) -> None:
         sys.exit(1)
 
 
+def _status_color(status: str) -> str:
+    """Map a release status string to a terminal color."""
+    s = status.lower()
+    if "pre-release" in s or "pre" in s:
+        return "cyan"
+    if "bugfix" in s or "active" in s:
+        return "green"
+    if "security" in s:
+        return "yellow"
+    if "end of life" in s or "end-of-life" in s or "eol" in s:
+        return "red"
+    return "white"
+
+
 @cli.command("list")
 @click.option(
     "--all",
@@ -300,8 +314,9 @@ def remove(version: str, dry_run: bool, yes: bool) -> None:
     is_flag=True,
     help="Show all versions including patch releases",
 )
+@click.option("--no-color", is_flag=True, help="Disable colorized output")
 @click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
-def list_versions(show_all: bool, output_json: bool) -> None:
+def list_versions(show_all: bool, no_color: bool, output_json: bool) -> None:
     """List available Python versions."""
     try:
         console = Console()
@@ -340,17 +355,32 @@ def list_versions(show_all: bool, output_json: bool) -> None:
                 click.echo(json.dumps(data, indent=2))
                 return
 
+            # Build a series->status lookup from active releases
+            release_status: dict[str, str] = {}
+            for rel in get_active_python_releases():
+                release_status[rel["series"]] = rel.get("status", "")
+
             click.echo(f"{'VERSION':<12} {'STATUS'}")
             click.echo("-" * 40)
 
             for v in versions:
                 ver = v["version"]
+                parts = ver.split(".")
+                ver_series = f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else ""
+                status_raw = release_status.get(ver_series, "")
+                color = _status_color(status_raw) if not no_color else None
+
                 status = ""
                 if ver == local_ver:
                     status = "(installed)"
                 elif latest_ver and ver == latest_ver:
                     status = "(latest)"
-                click.echo(f"{ver:<12} {status}")
+
+                line = f"{ver:<12} {status}"
+                if color and not no_color:
+                    click.secho(line, fg=color)
+                else:
+                    click.echo(line)
         else:
             ctx = nullcontext() if output_json else console.status("Fetching active releases...")
             with ctx:
@@ -387,6 +417,7 @@ def list_versions(show_all: bool, output_json: bool) -> None:
                 latest = rel.get("latest_version") or "-"
                 status = rel.get("status", "")
                 end_support = rel.get("end_of_support", "")
+                color = _status_color(status) if not no_color else None
 
                 marker = ""
                 if series == local_series:
@@ -403,10 +434,24 @@ def list_versions(show_all: bool, output_json: bool) -> None:
                 else:
                     status_display = status
 
-                click.echo(f"{series:<10} {latest:<12} {status_display:<15} {end_support}{marker}")
+                line = f"{series:<10} {latest:<12} {status_display:<15} {end_support}{marker}"
+                if color and not no_color:
+                    click.secho(line, fg=color)
+                else:
+                    click.echo(line)
 
             click.echo(f"\n * = your installed version ({local_ver})")
             click.echo("\nUse 'pyvm list --all' to see all patch versions")
+
+            if not no_color:
+                click.secho("  ● ", fg="green", nl=False)
+                click.echo("stable  ", nl=False)
+                click.secho("● ", fg="yellow", nl=False)
+                click.echo("security  ", nl=False)
+                click.secho("● ", fg="red", nl=False)
+                click.echo("end-of-life  ", nl=False)
+                click.secho("● ", fg="cyan", nl=False)
+                click.echo("pre-release")
 
         click.echo("Install with: pyvm install <version>")
 
