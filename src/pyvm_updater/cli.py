@@ -10,6 +10,8 @@ import subprocess
 import sys
 from typing import Any
 
+from contextlib import nullcontext
+
 import click
 import requests
 from rich.console import Console
@@ -120,12 +122,25 @@ def rollback(yes: bool) -> None:
 
 
 @cli.command()
-def check() -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
+def check(output_json: bool) -> None:
     """Check current Python version against latest stable release."""
     try:
         console = Console()
-        with console.status("Checking for updates..."):
+        ctx = nullcontext() if output_json else console.status("Checking for updates...")
+        with ctx:
             _local_ver, _latest_ver, needs_update = check_python_version(silent=True)
+
+        if output_json:
+            data = {
+                "local_version": _local_ver,
+                "latest_version": _latest_ver,
+                "update_available": needs_update,
+            }
+            click.echo(json.dumps(data, indent=2))
+            if not _latest_ver:
+                sys.exit(1)
+            sys.exit(0)
 
         click.echo("\n" + "=" * 40)
         click.echo("     Python Version Check Report")
@@ -286,7 +301,8 @@ def remove(version: str, dry_run: bool, yes: bool) -> None:
     is_flag=True,
     help="Show all versions including patch releases",
 )
-def list_versions(show_all: bool) -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
+def list_versions(show_all: bool, output_json: bool) -> None:
     """List available Python versions."""
     try:
         console = Console()
@@ -295,16 +311,37 @@ def list_versions(show_all: bool) -> None:
         local_series = ".".join(local_ver.split(".")[:2])
 
         if show_all:
-            with console.status("Fetching all Python versions..."):
+            ctx = nullcontext() if output_json else console.status("Fetching all Python versions...")
+            with ctx:
                 versions = get_available_python_versions(limit=100)
             if not versions:
-                click.echo("Could not fetch available versions.")
+                if output_json:
+                    click.echo(json.dumps({"error": "Could not fetch available versions."}, indent=2))
+                else:
+                    click.echo("Could not fetch available versions.")
                 sys.exit(1)
 
-            with console.status("Fetching latest version info..."):
+            ctx = nullcontext() if output_json else console.status("Fetching latest version info...")
+            with ctx:
                 latest_ver, _ = get_latest_python_info_with_retry()
 
-            click.echo(f"\n{'VERSION':<12} {'STATUS'}")
+            if output_json:
+                data = {
+                    "local_version": local_ver,
+                    "latest_version": latest_ver,
+                    "versions": [
+                        {
+                            "version": v["version"],
+                            "installed": v["version"] == local_ver,
+                            "latest": latest_ver and v["version"] == latest_ver,
+                        }
+                        for v in versions
+                    ],
+                }
+                click.echo(json.dumps(data, indent=2))
+                return
+
+            click.echo(f"{'VERSION':<12} {'STATUS'}")
             click.echo("-" * 40)
 
             for v in versions:
@@ -316,13 +353,34 @@ def list_versions(show_all: bool) -> None:
                     status = "(latest)"
                 click.echo(f"{ver:<12} {status}")
         else:
-            with console.status("Fetching active releases..."):
+            ctx = nullcontext() if output_json else console.status("Fetching active releases...")
+            with ctx:
                 releases = get_active_python_releases()
             if not releases:
-                click.echo("Could not fetch active releases.")
+                if output_json:
+                    click.echo(json.dumps({"error": "Could not fetch active releases."}, indent=2))
+                else:
+                    click.echo("Could not fetch active releases.")
                 sys.exit(1)
 
-            click.echo(f"\n{'SERIES':<10} {'LATEST':<12} {'STATUS':<15} {'SUPPORT UNTIL'}")
+            if output_json:
+                data = {
+                    "local_version": local_ver,
+                    "releases": [
+                        {
+                            "series": rel["series"],
+                            "latest_version": rel.get("latest_version"),
+                            "status": rel.get("status", ""),
+                            "end_of_support": rel.get("end_of_support", ""),
+                            "installed": rel["series"] == local_series,
+                        }
+                        for rel in releases
+                    ],
+                }
+                click.echo(json.dumps(data, indent=2))
+                return
+
+            click.echo(f"{'SERIES':<10} {'LATEST':<12} {'STATUS':<15} {'SUPPORT UNTIL'}")
             click.echo("-" * 55)
 
             for rel in releases:
@@ -453,30 +511,47 @@ def tui() -> None:
 
 
 @cli.command()
-def info() -> None:
+@click.option("--json", "output_json", is_flag=True, help="Output result as JSON")
+def info(output_json: bool) -> None:
     """Show detailed system and Python information."""
     try:
-        click.echo("=" * 50)
-        click.echo("           System Information")
-        click.echo("=" * 50)
-
         os_name, arch = get_os_info()
-        click.echo(f"Operating System: {os_name.title()}")
-        click.echo(f"Architecture:     {arch}")
-        click.echo(f"Python Version:   {platform.python_version()}")
-        click.echo(f"Python Path:      {sys.executable}")
-        click.echo(f"Platform:         {platform.platform()}")
-        click.echo(f"\nAdmin/Sudo:       {'Yes' if is_admin() else 'No'}")
 
+        info_data = {
+            "os": os_name,
+            "architecture": arch,
+            "python_version": platform.python_version(),
+            "python_path": sys.executable,
+            "platform": platform.platform(),
+            "admin": is_admin(),
+        }
+
+        # Try to find python3 path
         try:
-            result = subprocess.run(["which", "python3"], capture_output=True, text=True, check=False)
+            which_cmd = "where" if os_name == "windows" else "which"
+            result = subprocess.run([which_cmd, "python3"], capture_output=True, text=True, check=False)
             if result.returncode == 0:
-                python3_path = result.stdout.strip()
+                python3_path = result.stdout.strip().split("\n")[0]
                 if python3_path != sys.executable:
-                    click.echo(f"python3 command:  {python3_path}")
+                    info_data["python3_path"] = python3_path
         except Exception:
             pass
 
+        if output_json:
+            click.echo(json.dumps(info_data, indent=2))
+            return
+
+        click.echo("=" * 50)
+        click.echo("           System Information")
+        click.echo("=" * 50)
+        click.echo(f"Operating System: {os_name.title()}")
+        click.echo(f"Architecture:     {arch}")
+        click.echo(f"Python Version:   {info_data['python_version']}")
+        click.echo(f"Python Path:      {info_data['python_path']}")
+        click.echo(f"Platform:         {info_data['platform']}")
+        click.echo(f"\nAdmin/Sudo:       {'Yes' if info_data['admin'] else 'No'}")
+        if "python3_path" in info_data:
+            click.echo(f"python3 command:  {info_data['python3_path']}")
         click.echo("=" * 50)
 
     except Exception as e:
@@ -680,7 +755,7 @@ def venv_remove(name: str, yes: bool) -> None:
 
         venv_path = get_venv_dir() / name
         if not venv_path.exists():
-            click.echo(f"❌ Venv '{name}' not found.")
+            click.echo(f"[X] Venv '{name}' not found.")
             sys.exit(1)
 
     if not yes:
@@ -709,7 +784,50 @@ def venv_activate(name: str) -> None:
         click.echo(f"To activate '{name}':")
         click.echo(f"\n  {activate_cmd}\n")
     else:
-        click.echo(f"❌ Venv '{name}' not found.")
+        click.echo(f"[X] Venv '{name}' not found.")
+        sys.exit(1)
+
+
+@venv.command("rename")
+@click.argument("old_name")
+@click.argument("new_name")
+def venv_rename(old_name: str, new_name: str) -> None:
+    """Rename a virtual environment.
+
+    Moves the venv folder on disk and updates the internal registry.
+
+    Example: pyvm venv rename old-project new-project
+    """
+    from .venv import rename_venv
+
+    success, message = rename_venv(old_name, new_name)
+
+    if success:
+        click.echo(f"[OK] {message}")
+    else:
+        click.echo(f"[X] {message}")
+        sys.exit(1)
+
+
+@venv.command("duplicate")
+@click.argument("source_name")
+@click.argument("new_name")
+def venv_duplicate(source_name: str, new_name: str) -> None:
+    """Duplicate a virtual environment.
+
+    Copies the venv folder and fixes internal paths so the clone works
+    independently of the original.
+
+    Example: pyvm venv duplicate base-env experimental-env
+    """
+    from .venv import duplicate_venv
+
+    success, message = duplicate_venv(source_name, new_name)
+
+    if success:
+        click.echo(f"[OK] {message}")
+    else:
+        click.echo(f"[X] {message}")
         sys.exit(1)
 
 

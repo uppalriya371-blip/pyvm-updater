@@ -46,6 +46,7 @@ def save_venv_registry(registry: dict[str, Any]) -> None:
             json.dump(registry, f, indent=2)
     except OSError as e:
         log.warning(f"Could not save venv registry: {e}")
+        raise
 
 
 def find_python_executable(version: str) -> str | None:
@@ -202,7 +203,7 @@ def create_venv(
                 error_output = e.stderr or e.stdout
                 return (
                     True,
-                    f"{success_msg}\n   ⚠️ Warning: Failed to install requirements from {requirements_file.name}:\n"
+                    f"{success_msg}\n   [!] Warning: Failed to install requirements from {requirements_file.name}:\n"
                     f"{error_output}",
                 )
 
@@ -297,6 +298,174 @@ def remove_venv(name: str, force: bool = False) -> tuple[bool, str]:
 
     except OSError as e:
         return False, f"Failed to remove venv: {e}"
+
+
+def _fix_venv_paths(venv_path: Path, old_path: Path) -> None:
+    """Fix hardcoded paths inside a venv so it points to its new location.
+
+    Args:
+        venv_path: The new venv directory.
+        old_path: The original venv directory.
+    """
+    old_str = str(old_path)
+    new_str = str(venv_path)
+
+    # Fix pyvenv.cfg
+    cfg = venv_path / "pyvenv.cfg"
+    if cfg.exists():
+        try:
+            t = cfg.read_text(encoding="utf-8")
+            cfg.write_text(t.replace(old_str, new_str), encoding="utf-8")
+        except OSError:
+            pass
+
+    # Fix all scripts in bin/Scripts (activation scripts, pip, wrappers, etc.)
+    for scripts_dir in [venv_path / "bin", venv_path / "Scripts"]:
+        if not scripts_dir.exists():
+            continue
+
+        for script in scripts_dir.iterdir():
+            if not script.is_file():
+                continue
+
+            try:
+                # Try to process as text first (for shell scripts, .bat, .ps1, python scripts)
+                try:
+                    t = script.read_text(encoding="utf-8")
+                    if old_str in t:
+                        script.write_text(t.replace(old_str, new_str), encoding="utf-8")
+                except UnicodeDecodeError:
+                    # Fallback for binary wrappers (e.g. pip.exe launcher)
+                    b = script.read_bytes()
+                    old_bytes = old_str.encode("utf-8")
+                    new_bytes = new_str.encode("utf-8")
+                    if old_bytes in b:
+                        script.write_bytes(b.replace(old_bytes, new_bytes))
+            except OSError:
+                pass
+
+
+def rename_venv(old_name: str, new_name: str) -> tuple[bool, str]:
+    """Rename a virtual environment on disk and in the registry.
+
+    Args:
+        old_name: Current name of the venv.
+        new_name: Desired new name for the venv.
+
+    Returns:
+        Tuple of (success, message).
+    """
+    registry = get_venv_registry()
+
+    # Resolve old venv path
+    if old_name in registry:
+        old_path = Path(registry[old_name].get("path", ""))
+    else:
+        old_path = get_venv_dir() / old_name
+
+    # Check old venv exists (on disk or in registry)
+    if old_name not in registry and not old_path.exists():
+        return False, f"Venv '{old_name}' not found"
+
+    # Check new name is not taken
+    new_path = old_path.parent / new_name
+    if new_name in registry:
+        return False, f"Venv '{new_name}' already exists in registry"
+    if new_path.exists():
+        return False, f"Directory '{new_path}' already exists"
+
+    disk_moved = False
+    try:
+        # Move the folder on disk if it exists
+        if old_path.exists():
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(old_path), str(new_path))
+            disk_moved = True
+            _fix_venv_paths(new_path, old_path)
+
+        # Update registry
+        if old_name in registry:
+            entry = registry.pop(old_name)
+            entry["path"] = str(new_path)
+            registry[new_name] = entry
+        else:
+            # Unregistered venv on disk, create a registry entry
+            registry[new_name] = {
+                "path": str(new_path),
+                "python_version": "unknown",
+            }
+
+        try:
+            save_venv_registry(registry)
+        except OSError as e:
+            # Rollback disk rename
+            if disk_moved:
+                shutil.move(str(new_path), str(old_path))
+                _fix_venv_paths(old_path, new_path)
+            return False, f"Failed to save registry, rename rolled back: {e}"
+
+        return True, f"Renamed venv '{old_name}' to '{new_name}'"
+
+    except OSError as e:
+        return False, f"Failed to rename venv: {e}"
+
+
+def duplicate_venv(source_name: str, new_name: str) -> tuple[bool, str]:
+    """Duplicate a virtual environment by copying it to a new name.
+
+    Copies the venv folder on disk, fixes internal paths, and registers
+    the new venv in the JSON registry.
+
+    Args:
+        source_name: Name of the existing venv to copy.
+        new_name: Name for the new copy.
+
+    Returns:
+        Tuple of (success, message).
+    """
+    registry = get_venv_registry()
+
+    # Resolve source path
+    if source_name in registry:
+        source_path = Path(registry[source_name].get("path", ""))
+    else:
+        source_path = get_venv_dir() / source_name
+
+    # Validate source exists on disk
+    if not source_path.exists():
+        return False, f"Venv '{source_name}' not found on disk"
+
+    # Validate new name is not taken
+    new_path = get_venv_dir() / new_name
+    if new_name in registry:
+        return False, f"Venv '{new_name}' already exists in registry"
+    if new_path.exists():
+        return False, f"Directory '{new_path}' already exists"
+
+    try:
+        # Copy the entire venv directory
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(str(source_path), str(new_path))
+
+        # Fix hardcoded paths in the copy
+        _fix_venv_paths(new_path, source_path)
+
+        # Register the new venv
+        if source_name in registry:
+            entry = dict(registry[source_name])
+        else:
+            entry = {"python_version": "unknown"}
+        entry["path"] = str(new_path)
+        registry[new_name] = entry
+        save_venv_registry(registry)
+
+        return True, f"Duplicated venv '{source_name}' as '{new_name}'"
+
+    except OSError as e:
+        # Clean up partial copy if it exists
+        if new_path.exists():
+            shutil.rmtree(new_path, ignore_errors=True)
+        return False, f"Failed to duplicate venv: {e}"
 
 
 def get_venv_activate_command(name: str) -> str | None:
