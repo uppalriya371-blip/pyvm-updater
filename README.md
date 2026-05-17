@@ -24,6 +24,7 @@ pyvm provides a safe and convenient way to manage multiple Python versions on yo
 - Check current Python version against latest stable release
 - Install the latest Python or specific versions side-by-side
 - List all available Python versions with support status
+- Interactive progress spinners for network operations
 - Cross-platform support for Windows, Linux, and macOS
 - Virtual environment management
 - Configuration system for user preferences

@@ -39,7 +39,7 @@ class TestCheckJson:
     def test_check_json_network_failure(self, mock_check, runner):
         mock_check.return_value = ("3.12.1", None, False)
         result = runner.invoke(cli, ["check", "--json"])
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         data = json.loads(result.output)
         assert data["latest_version"] is None
         assert data["update_available"] is False
