@@ -8,9 +8,8 @@ import platform
 import shutil
 import subprocess
 import sys
-from typing import Any
-
 from contextlib import nullcontext
+from typing import Any
 
 import click
 import requests

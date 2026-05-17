@@ -46,7 +46,6 @@ class TestCheckSpinner:
         assert "Could not fetch latest version information" in result.output
 
 
-
 class TestListSpinner:
     """Tests for spinner on pyvm list."""
 
