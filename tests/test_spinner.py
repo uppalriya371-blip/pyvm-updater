@@ -38,6 +38,14 @@ class TestCheckSpinner:
         assert "new version" in result.output.lower() or "3.14.0" in result.output
         assert "pyvm update" in result.output
 
+    @patch("pyvm_updater.cli.check_python_version")
+    def test_check_fetch_failure(self, mock_check, runner):
+        mock_check.return_value = ("3.13.0", None, False)
+        result = runner.invoke(cli, ["check"])
+        assert result.exit_code == 1
+        assert "Could not fetch latest version information" in result.output
+
+
 
 class TestListSpinner:
     """Tests for spinner on pyvm list."""

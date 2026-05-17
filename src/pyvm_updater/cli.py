@@ -134,13 +134,17 @@ def check() -> None:
         click.echo(f"Latest version: {_latest_ver}")
         click.echo("=" * 40)
 
+        if not _latest_ver:
+            click.echo("❌ Could not fetch latest version information.")
+            sys.exit(1)
+
         if not needs_update:
-            click.echo("[OK] You are up-to-date!")
+            click.echo("✅ You are up-to-date!")
         else:
-            click.echo(f"[!] A new version ({_latest_ver}) is available!")
+            click.echo(f"🚨 A new version ({_latest_ver}) is available!")
 
         if needs_update:
-            click.echo("\n[*] Tip: Run 'pyvm update' to upgrade Python")
+            click.echo("\n💡 Tip: Run 'pyvm update' to upgrade Python")
             sys.exit(1)
         else:
             sys.exit(0)
@@ -286,6 +290,7 @@ def list_versions(show_all: bool) -> None:
     """List available Python versions."""
     try:
         console = Console()
+
         local_ver = platform.python_version()
         local_series = ".".join(local_ver.split(".")[:2])
 
@@ -374,29 +379,29 @@ def update(
 
         if target_version:
             if not validate_version_string(target_version) or len(target_version.split(".")) < 3:
-                click.echo(f"[X] Error: Invalid version format: {target_version}")
+                click.echo(f"❌ Error: Invalid version format: {target_version}")
                 click.echo("Version must be in format: X.Y.Z (e.g., 3.11.5)")
                 sys.exit(1)
 
             install_version = target_version
-            click.echo(f"[*] Target version specified: {install_version}")
-            click.echo(f"[=] Current version: {local_ver}")
+            click.echo(f"📌 Target version specified: {install_version}")
+            click.echo(f"📊 Current version: {local_ver}")
         else:
             with Console().status("Checking for updates..."):
                 local_ver, latest_ver, needs_update = check_python_version(silent=True)
 
             if not latest_ver:
-                click.echo("[X] Could not fetch latest version information.")
+                click.echo("❌ Could not fetch latest version information.")
                 sys.exit(1)
 
-            click.echo(f"\n[=] Current version: {local_ver}")
-            click.echo(f"[=] Latest version:  {latest_ver}")
+            click.echo(f"\n📊 Current version: {local_ver}")
+            click.echo(f"📊 Latest version:  {latest_ver}")
 
             if not needs_update:
-                click.echo("\n[OK] You already have the latest version!")
+                click.echo("\n✅ You already have the latest version!")
                 sys.exit(0)
 
-            click.echo(f"\n[>] Update available: {local_ver} → {latest_ver}")
+            click.echo(f"\n🚀 Update available: {local_ver} → {latest_ver}")
             install_version = latest_ver
 
         if not auto:
@@ -405,7 +410,7 @@ def update(
                 sys.exit(0)
 
         os_name, arch = get_os_info()
-        click.echo(f"\n[PC]  Detected: {os_name.title()} ({arch})")
+        click.echo(f"\n🖥️  Detected: {os_name.title()} ({arch})")
 
         success = False
         if os_name == "windows":
@@ -415,21 +420,21 @@ def update(
         elif os_name == "darwin":
             success = update_python_macos(install_version, preferred=installer)
         else:
-            click.echo(f"[X] Unsupported operating system: {os_name}")
+            click.echo(f"❌ Unsupported operating system: {os_name}")
             sys.exit(1)
 
         if success:
             HistoryManager.save_history("update", install_version)
             show_python_usage_instructions(install_version, os_name)
         else:
-            click.echo("\n[!]️  Installation process encountered issues.")
+            click.echo("\n⚠️  Installation process encountered issues.")
             sys.exit(1)
 
     except KeyboardInterrupt:
         click.echo("\n\nOperation cancelled by user.")
         sys.exit(130)
     except Exception as e:
-        click.echo(f"\n[X] Error: {e}")
+        click.echo(f"\n❌ Error: {e}")
         sys.exit(1)
 
 
@@ -441,7 +446,7 @@ def tui() -> None:
 
         run_tui()
     except ImportError:
-        click.echo("[X] TUI mode requires the 'textual' package.")
+        click.echo("❌ TUI mode requires the 'textual' package.")
         click.echo("Install it with: pip install pyvm-updater[tui]")
         click.echo("Or: pip install textual")
         sys.exit(1)
@@ -536,9 +541,9 @@ def config(show: bool, init_config: bool, path: bool, set_kv: tuple[str, str] | 
 
         cfg.set(section, key, typed_value)
         if cfg.save():
-            click.echo(f"[OK] Set {key_path} = {typed_value}")
+            click.echo(f"✅ Set {key_path} = {typed_value}")
         else:
-            click.echo("[X] Failed to save configuration.")
+            click.echo("❌ Failed to save configuration.")
             sys.exit(1)
         return
 
@@ -560,7 +565,7 @@ def config(show: bool, init_config: bool, path: bool, set_kv: tuple[str, str] | 
     click.echo("\nDetected Installers:")
     click.echo("-" * 40)
     for plugin in pm.get_all_plugins():
-        status = "[OK] Supported" if plugin.is_supported() else "[X] Not Found"
+        status = "✅ Supported" if plugin.is_supported() else "❌ Not Found"
         priority = plugin.get_priority()
         click.echo(f"{plugin.get_name():<12} {status:<15} (Priority: {priority})")
     click.echo("-" * 40)
@@ -619,16 +624,16 @@ def venv_create(
     )
 
     if success:
-        click.echo(f"[OK] {message}")
+        click.echo(f"✅ {message}")
 
         # Show activation command
         from .venv import get_venv_activate_command
 
         activate_cmd = get_venv_activate_command(name)
         if activate_cmd:
-            click.echo(f"\n[*] To activate: {activate_cmd}")
+            click.echo(f"\n💡 To activate: {activate_cmd}")
     else:
-        click.echo(f"[X] {message}")
+        click.echo(f"❌ {message}")
         sys.exit(1)
 
 
@@ -656,7 +661,7 @@ def venv_list(as_json: bool) -> None:
         click.echo(f"{'NAME':<20} {'PYTHON':<10} {'STATUS':<10} PATH")
         click.echo("-" * 70)
         for v in venvs:
-            status = "[OK]" if v["exists"] else "[X] missing"
+            status = "✓" if v["exists"] else "✗ missing"
             click.echo(f"{v['name']:<20} {v['python_version']:<10} {status:<10} {v['path']}")
         click.echo(f"\nTotal: {len(venvs)} venv(s)")
 
@@ -675,7 +680,7 @@ def venv_remove(name: str, yes: bool) -> None:
 
         venv_path = get_venv_dir() / name
         if not venv_path.exists():
-            click.echo(f"[X] Venv '{name}' not found.")
+            click.echo(f"❌ Venv '{name}' not found.")
             sys.exit(1)
 
     if not yes:
@@ -686,9 +691,9 @@ def venv_remove(name: str, yes: bool) -> None:
     success, message = remove_venv(name)
 
     if success:
-        click.echo(f"[OK] {message}")
+        click.echo(f"✅ {message}")
     else:
-        click.echo(f"[X] {message}")
+        click.echo(f"❌ {message}")
         sys.exit(1)
 
 
@@ -704,14 +709,14 @@ def venv_activate(name: str) -> None:
         click.echo(f"To activate '{name}':")
         click.echo(f"\n  {activate_cmd}\n")
     else:
-        click.echo(f"[X] Venv '{name}' not found.")
+        click.echo(f"❌ Venv '{name}' not found.")
         sys.exit(1)
 
 
 @cli.command()
 def doctor():
     """Run a health check of the environment."""
-    click.secho("[?] Running pyvm-updater health check...", fg="cyan", bold=True)
+    click.secho("🩺 Running pyvm-updater health check...", fg="cyan", bold=True)
     click.echo("-" * 40)
 
     all_passed = True
@@ -721,7 +726,7 @@ def doctor():
     mise_path = shutil.which("mise")
     if pyenv_path or mise_path:
         tool = "pyenv" if pyenv_path else "mise"
-        click.secho(f" [OK] Helper Tool: Found {tool} at {pyenv_path or mise_path}", fg="green")
+        click.secho(f" [✓] Helper Tool: Found {tool} at {pyenv_path or mise_path}", fg="green")
     else:
         click.secho(" [!] Helper Tool: Neither pyenv nor mise found. (Recommended for Linux/macOS)", fg="yellow")
 
@@ -729,18 +734,18 @@ def doctor():
     try:
         # Checking python.org since that's where updates are fetched from
         requests.get("https://www.python.org", timeout=5)
-        click.secho(" [OK] Network: Successfully reached python.org", fg="green")
+        click.secho(" [✓] Network: Successfully reached python.org", fg="green")
     except Exception:
-        click.secho(" [X] Network: Failed to reach python.org. Check your connection.", fg="red")
+        click.secho(" [✗] Network: Failed to reach python.org. Check your connection.", fg="red")
         all_passed = False
 
     # 3. Check Write Permissions
     # pyvm typically uses ~/.config/pyvm or the current directory for logs/configs
     target_dir = os.path.expanduser("~")
     if os.access(target_dir, os.W_OK):
-        click.secho(f" [OK] Permissions: Write access to {target_dir} confirmed", fg="green")
+        click.secho(f" [✓] Permissions: Write access to {target_dir} confirmed", fg="green")
     else:
-        click.secho(f" [X] Permissions: No write access to {target_dir}", fg="red")
+        click.secho(f" [✗] Permissions: No write access to {target_dir}", fg="red")
         all_passed = False
 
     click.echo("-" * 40)
@@ -777,7 +782,7 @@ def use_version(version: str) -> None:
         # Locate Python
         python_exe = find_python_executable(version)
         if not python_exe:
-            click.echo(f"[X] Python {version} not found.")
+            click.echo(f"❌ Python {version} not found.")
             click.echo("\nInstalled versions:")
             from .version import get_installed_python_versions
 
@@ -860,8 +865,8 @@ def use_version(version: str) -> None:
             env["PYVM_VERSION"] = version
 
         click.echo("\n" + "=" * 50)
-        click.echo(f"[*] Entering temporary shell for Python {version}")
-        click.echo("[i] Type 'exit' or Press Ctrl+D to return.")
+        click.echo(f"🎉 Entering temporary shell for Python {version}")
+        click.echo("ℹ️  Type 'exit' or Press Ctrl+D to return.")
         click.echo("=" * 50 + "\n")
 
         try:
@@ -882,7 +887,7 @@ def main() -> None:
     try:
         cli()
     except Exception as e:
-        click.echo(f"\n[X] Unexpected error: {e}")
+        click.echo(f"\n❌ Unexpected error: {e}")
         sys.exit(1)
 
 
