@@ -295,7 +295,6 @@ class TestMigration:
         (data_dir / "history.json").write_text('{"xdg": "new"}')
 
         mark_done_called = False
-        original_mark = None
 
         def fake_mark_done():
             nonlocal mark_done_called
@@ -305,9 +304,7 @@ class TestMigration:
             with patch("pyvm_updater.paths.get_cache_dir", return_value=cache_dir):
                 with patch("pyvm_updater.paths.get_history_file", return_value=data_dir / "history.json"):
                     with patch("pyvm_updater.paths.get_metadata_db", return_value=cache_dir / "metadata.sqlite"):
-                        with patch(
-                            "pyvm_updater.paths.get_venv_registry_file", return_value=data_dir / "venvs.json"
-                        ):
+                        with patch("pyvm_updater.paths.get_venv_registry_file", return_value=data_dir / "venvs.json"):
                             with patch("pyvm_updater.paths.get_venv_dir", return_value=data_dir / "venvs"):
                                 with patch(
                                     "pyvm_updater.paths._LEGACY_PATHS",
@@ -321,7 +318,9 @@ class TestMigration:
                                     },
                                 ):
                                     with patch("pyvm_updater.paths._migration_done", return_value=False):
-                                        with patch("pyvm_updater.paths._mark_migration_done", side_effect=fake_mark_done):
+                                        with patch(
+                                            "pyvm_updater.paths._mark_migration_done", side_effect=fake_mark_done
+                                        ):
                                             migrate_legacy_paths()
 
         # Legacy history must be preserved (conflict)

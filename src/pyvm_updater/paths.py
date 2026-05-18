@@ -127,9 +127,7 @@ def _move_file(src: Path, dst: Path) -> bool:
             shutil.move(str(src), str(dst))
             log.info(f"Migrated {src} -> {dst}")
         else:
-            log.warning(
-                f"Destination {dst} already exists; keeping legacy {src} to avoid data loss."
-            )
+            log.warning(f"Destination {dst} already exists; keeping legacy {src} to avoid data loss.")
             return False
         return not src.exists()
     except (OSError, shutil.Error) as e:
@@ -151,10 +149,7 @@ def _move_directory(src: Path, dst: Path) -> bool:
                 if not target.exists():
                     shutil.move(str(item), str(target))
                 else:
-                    log.warning(
-                        f"Conflict: {target} already exists; "
-                        f"keeping legacy {item} in place."
-                    )
+                    log.warning(f"Conflict: {target} already exists; keeping legacy {item} in place.")
                     has_conflicts = True
             # Only remove source dir if it's now empty
             if not any(src.iterdir()):
