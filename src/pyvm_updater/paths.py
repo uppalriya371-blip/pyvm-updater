@@ -127,10 +127,10 @@ def _move_file(src: Path, dst: Path) -> bool:
             shutil.move(str(src), str(dst))
             log.info(f"Migrated {src} -> {dst}")
         else:
-            # If destination already exists, we prefer it but we must remove the legacy source
-            # to prevent partial migration state. We log that we skipped overwriting.
-            log.info(f"Destination {dst} already exists, skipping move. Removing legacy {src}.")
-            src.unlink()
+            log.warning(
+                f"Destination {dst} already exists; keeping legacy {src} to avoid data loss."
+            )
+            return False
         return not src.exists()
     except (OSError, shutil.Error) as e:
         log.warning(f"Failed to migrate {src} -> {dst}: {e}")
@@ -144,12 +144,23 @@ def _move_directory(src: Path, dst: Path) -> bool:
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists():
-            # Merge contents if destination already exists
+            # Merge non-conflicting contents; leave conflicts in source
+            has_conflicts = False
             for item in src.iterdir():
                 target = dst / item.name
                 if not target.exists():
                     shutil.move(str(item), str(target))
-            shutil.rmtree(str(src), ignore_errors=True)
+                else:
+                    log.warning(
+                        f"Conflict: {target} already exists; "
+                        f"keeping legacy {item} in place."
+                    )
+                    has_conflicts = True
+            # Only remove source dir if it's now empty
+            if not any(src.iterdir()):
+                src.rmdir()
+            if has_conflicts:
+                return False
         else:
             shutil.move(str(src), str(dst))
         log.info(f"Migrated {src} -> {dst}")

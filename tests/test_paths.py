@@ -6,6 +6,8 @@ from unittest.mock import patch
 import pytest
 
 from pyvm_updater.paths import (
+    _move_directory,
+    _move_file,
     get_cache_dir,
     get_config_dir,
     get_data_dir,
@@ -196,6 +198,139 @@ class TestMigration:
         # Legacy files should still exist (not moved)
         assert env["legacy_history"].exists()
         assert env["legacy_metadata"].exists()
+
+    def test_move_file_preserves_source_on_conflict(self, tmp_path):
+        """_move_file must NOT delete source when destination already exists."""
+        src = tmp_path / "legacy.json"
+        dst = tmp_path / "xdg" / "data.json"
+        src.write_text('{"legacy": true}')
+        dst.parent.mkdir(parents=True)
+        dst.write_text('{"xdg": true}')
+
+        result = _move_file(src, dst)
+
+        assert result is False
+        # Both files must still exist with original content
+        assert src.exists()
+        assert src.read_text() == '{"legacy": true}'
+        assert dst.read_text() == '{"xdg": true}'
+
+    def test_move_directory_partial_overlap_preserves_conflicts(self, tmp_path):
+        """Non-conflicting items are moved; conflicting items stay in source."""
+        src = tmp_path / "src_dir"
+        dst = tmp_path / "dst_dir"
+        src.mkdir()
+        dst.mkdir()
+
+        # Conflicting item (exists in both)
+        (src / "conflict.txt").write_text("src-version")
+        (dst / "conflict.txt").write_text("dst-version")
+
+        # Non-conflicting item (only in source)
+        (src / "unique.txt").write_text("only-in-src")
+
+        result = _move_directory(src, dst)
+
+        assert result is False
+        # Conflicting file preserved in source
+        assert (src / "conflict.txt").exists()
+        assert (src / "conflict.txt").read_text() == "src-version"
+        # Destination conflict file untouched
+        assert (dst / "conflict.txt").read_text() == "dst-version"
+        # Non-conflicting file moved to destination
+        assert (dst / "unique.txt").exists()
+        assert (dst / "unique.txt").read_text() == "only-in-src"
+        assert not (src / "unique.txt").exists()
+        # Source directory still exists (has conflicting item)
+        assert src.is_dir()
+
+    def test_move_directory_full_overlap_keeps_all_source(self, tmp_path):
+        """When all items conflict, source dir and all its items are preserved."""
+        src = tmp_path / "src_dir"
+        dst = tmp_path / "dst_dir"
+        src.mkdir()
+        dst.mkdir()
+
+        (src / "a.txt").write_text("src-a")
+        (dst / "a.txt").write_text("dst-a")
+        (src / "b.txt").write_text("src-b")
+        (dst / "b.txt").write_text("dst-b")
+
+        result = _move_directory(src, dst)
+
+        assert result is False
+        # All source items preserved
+        assert (src / "a.txt").read_text() == "src-a"
+        assert (src / "b.txt").read_text() == "src-b"
+        # All destination items untouched
+        assert (dst / "a.txt").read_text() == "dst-a"
+        assert (dst / "b.txt").read_text() == "dst-b"
+
+    def test_move_directory_no_conflict_removes_source(self, tmp_path):
+        """When dst exists but has no overlapping items, source is fully merged and removed."""
+        src = tmp_path / "src_dir"
+        dst = tmp_path / "dst_dir"
+        src.mkdir()
+        dst.mkdir()
+
+        (src / "from_src.txt").write_text("hello")
+        (dst / "already_here.txt").write_text("world")
+
+        result = _move_directory(src, dst)
+
+        assert result is True
+        assert not src.exists()
+        assert (dst / "from_src.txt").read_text() == "hello"
+        assert (dst / "already_here.txt").read_text() == "world"
+
+    def test_migration_conflict_preserves_legacy_and_skips_done_flag(self, migration_env):
+        """migrate_legacy_paths must not mark done when conflicts exist, and must preserve legacy files."""
+        env = migration_env
+
+        # Pre-create destination files with different content
+        data_dir = env["data_dir"]
+        cache_dir = env["cache_dir"]
+        data_dir.mkdir(parents=True)
+        cache_dir.mkdir(parents=True)
+        (data_dir / "history.json").write_text('{"xdg": "new"}')
+
+        mark_done_called = False
+        original_mark = None
+
+        def fake_mark_done():
+            nonlocal mark_done_called
+            mark_done_called = True
+
+        with patch("pyvm_updater.paths.get_data_dir", return_value=data_dir):
+            with patch("pyvm_updater.paths.get_cache_dir", return_value=cache_dir):
+                with patch("pyvm_updater.paths.get_history_file", return_value=data_dir / "history.json"):
+                    with patch("pyvm_updater.paths.get_metadata_db", return_value=cache_dir / "metadata.sqlite"):
+                        with patch(
+                            "pyvm_updater.paths.get_venv_registry_file", return_value=data_dir / "venvs.json"
+                        ):
+                            with patch("pyvm_updater.paths.get_venv_dir", return_value=data_dir / "venvs"):
+                                with patch(
+                                    "pyvm_updater.paths._LEGACY_PATHS",
+                                    {
+                                        "history": env["legacy_history"],
+                                        "metadata": env["legacy_metadata"],
+                                        "venv_dir": env["legacy_pyvm"] / "venvs",
+                                        "venv_registry": env["legacy_pyvm"] / "venvs.json",
+                                        "config_dir": env["home"] / ".config" / "pyvm",
+                                        "config_file": env["home"] / ".config" / "pyvm" / "config.toml",
+                                    },
+                                ):
+                                    with patch("pyvm_updater.paths._migration_done", return_value=False):
+                                        with patch("pyvm_updater.paths._mark_migration_done", side_effect=fake_mark_done):
+                                            migrate_legacy_paths()
+
+        # Legacy history must be preserved (conflict)
+        assert env["legacy_history"].exists()
+        assert env["legacy_history"].read_text() == '[{"action": "install", "version": "3.12.1"}]'
+        # XDG history must be untouched
+        assert (data_dir / "history.json").read_text() == '{"xdg": "new"}'
+        # Migration must NOT be marked as done
+        assert not mark_done_called
 
     def test_migration_handles_missing_legacy_files(self, tmp_path):
         """Test migration gracefully handles non-existent legacy files."""
