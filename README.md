@@ -11,6 +11,7 @@ pyvm provides a safe and convenient way to manage multiple Python versions on yo
 ## Features
 
 ### Interactive TUI
+
 <img width="1914" height="1039" alt="image" src="https://github.com/user-attachments/assets/6ffc278a-752b-468b-8a57-fff4d2936677" />
 
 - Terminal interface with keyboard and mouse support
@@ -43,6 +44,7 @@ pyvm provides a safe and convenient way to manage multiple Python versions on yo
 pyvm supports custom installation backends through a plugin system. You can add your own installers by placing Python files in `~/.config/pyvm/plugins/`.
 
 ### Security Note
+
 > [!WARNING]
 > **Custom plugins are executed as arbitrary Python code.** Only install plugins from trusted sources. pyvm will load and execute any `.py` file found in the plugins directory during startup.
 
@@ -98,20 +100,33 @@ pyvm install 3.12.8
 
 ## Usage
 
-## Shell Completion
+### Shell Completion
 
 Enable tab completion for your shell:
 
-**Bash** (add to `~/.bashrc`):
+#### Bash
+
+Add this to `~/.bashrc`:
+
 ```bash
 eval "$(_PYVM_COMPLETE=bash_source pyvm)"
+```
 
-**Zsh** (add to `~/.zshrc`):
+#### Zsh
+
+Add this to `~/.zshrc`:
+
 ```bash
 eval "$(_PYVM_COMPLETE=zsh_source pyvm)"
-**Fish** (add to `~/.config/fish/config.fish`):
+```
+
+#### Fish
+
+Add this to `~/.config/fish/config.fish`:
+
 ```fish
 _PYVM_COMPLETE=fish_source pyvm | source
+```
 
 ### Interactive TUI Mode
 
@@ -173,7 +188,8 @@ pyvm venv remove myproject
 
 After installation, the new Python is available alongside your existing version:
 
-Linux/macOS:
+#### Linux/macOS
+
 ```bash
 # Use the new version
 python3.12 your_script.py
@@ -183,7 +199,8 @@ python3.12 -m venv myproject
 source myproject/bin/activate
 ```
 
-Windows:
+#### Windows
+
 ```bash
 # Use Python Launcher
 py -3.12 your_script.py
@@ -196,18 +213,21 @@ py --list
 
 pyvm uses an intelligent fallback chain for installation:
 
-Linux:
+#### Linux
+
 1. mise (if available)
 2. pyenv (if available)
 3. apt with deadsnakes PPA (Ubuntu/Debian)
 4. dnf/yum (Fedora/RHEL)
 
-macOS:
+#### macOS
+
 1. mise (if available)
 2. pyenv (if available)
 3. Homebrew
 
-Windows:
+#### Windows
+
 - Downloads official installer from python.org
 
 ## Configuration
@@ -230,6 +250,7 @@ theme = "dark"
 ```
 
 Manage configuration:
+
 ```bash
 pyvm config           # View current settings
 pyvm config --init    # Create default config
@@ -245,6 +266,7 @@ pyvm config --path    # Show config file location
 ## Dependencies
 
 Automatically installed:
+
 - requests
 - beautifulsoup4
 - packaging
@@ -289,15 +311,18 @@ The new Python is installed alongside your existing version. Use the specific ve
 python3.12 --version    # Linux/macOS
 py -3.12 --version      # Windows
 ```
+
 ### Permission Denied Errors
-* **Cause:** The script lacks execute permissions or is trying to write to a protected folder.
-* **Fix:**
-    * Run the command with `sudo` (Linux/Mac) or as Administrator (Windows).
-    * Ensure the script is executable: `chmod +x pyvm-updater`.
+
+- **Cause:** The script lacks execute permissions or is trying to write to a protected folder.
+- **Fix:**
+  - Run the command with `sudo` (Linux/Mac) or as Administrator (Windows).
+  - Ensure the script is executable: `chmod +x pyvm-updater`.
 
 ### Firewall/Antivirus Blocking
-* **Cause:** Security software might flag the updater as suspicious because it modifies system files.
-* **Fix:** Whitelist `pyvm-updater` in your antivirus settings or temporarily disable the firewall during the update process.
+
+- **Cause:** Security software might flag the updater as suspicious because it modifies system files.
+- **Fix:** Whitelist `pyvm-updater` in your antivirus settings or temporarily disable the firewall during the update process.
 
 ## 🆚 Comparison with other tools
 
@@ -307,11 +332,13 @@ py -3.12 --version      # Windows
 | **Complexity** | Low (Single script) | High (Shims, builds) | High (Plugins) |
 | **OS Support** | Cross-platform | Unix-focused | Unix-focused |
 | **Use Case** | Quick updates & lightweight management | Deep version management | Universal dev environments |
+
 ## 📖 API Documentation
 
 Developers can use `pyvm-updater` as a Python library to manage installations programmatically.
 
 ### Installation Functions
+
 The module provides platform-specific functions to install Python versions.
 
 ```python
@@ -325,6 +352,7 @@ success = installers.update_python_linux("3.12.1", build_from_source=False)
 
 # macOS: Tries mise, pyenv, brew, then official installer
 success = installers.update_python_macos("3.12.1")
+```
 
 ## Development
 
