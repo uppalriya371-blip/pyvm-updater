@@ -29,6 +29,7 @@ from .installers import (
     update_python_windows,
 )
 from .logging_config import get_logger, setup_logging
+from .paths import ensure_directories, migrate_legacy_paths
 from .utils import get_os_info, is_admin, validate_version_string
 from .version import (
     check_python_version,
@@ -50,6 +51,10 @@ def cli(ctx: click.Context, version: bool, verbose: bool, quiet: bool) -> None:
     """Python Version Manager - Check and install Python (does NOT modify system defaults)"""
     # Initialize logging
     setup_logging(verbose=verbose, quiet=quiet)
+
+    # Ensure XDG directories exist and migrate legacy paths on first run
+    ensure_directories()
+    migrate_legacy_paths()
 
     # Store config in context for subcommands
     ctx.ensure_object(dict)

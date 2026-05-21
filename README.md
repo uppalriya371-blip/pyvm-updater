@@ -257,6 +257,23 @@ pyvm config --init    # Create default config
 pyvm config --path    # Show config file location
 ```
 
+## Data Locations (XDG Compliance)
+
+`pyvm` stores configuration, data, and cache files following the [XDG Base Directory Specification](https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html) on Linux/macOS, and standard `LocalAppData` locations on Windows.
+
+**Linux / macOS:**
+- **Config:** `~/.config/pyvm/` (`$XDG_CONFIG_HOME`)
+- **Data (Venvs/History):** `~/.local/share/pyvm/` (`$XDG_DATA_HOME`)
+- **Cache (Metadata):** `~/.cache/pyvm/` (`$XDG_CACHE_HOME`)
+
+**Windows:**
+- **Config / Data / Cache:** `%LOCALAPPDATA%\pyvm\`
+
+### Automatic Migration for Existing Users
+If you are upgrading from an older version of `pyvm` that used legacy paths (e.g., `~/.pyvm`, `~/.pyvm_history.json`), the tool will **automatically migrate** your files and virtual environments to the new locations the next time you run any `pyvm` command.
+
+* **Logs:** If you run into issues, check your terminal output. Failed partial migrations will be retried automatically on subsequent runs until successful.
+
 ## Requirements
 
 - Python 3.9 or higher
