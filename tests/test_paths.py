@@ -115,41 +115,43 @@ class TestConcreteFilePaths:
 
 
 class TestMigration:
+    """Tests for legacy path migration."""
 
     def test_registry_path_rewrite_on_migration(self, migration_env):
         """Test that legacy venv paths in venvs.json are rewritten to new root."""
         import json
+
         env = migration_env
 
         # Write a legacy registry with an absolute path under the old venv root
         legacy_venv_dir = env["legacy_pyvm"] / "venvs"
         legacy_registry = env["legacy_pyvm"] / "venvs.json"
         legacy_path = str(legacy_venv_dir / "myenv")
-        registry_data = {
-            "myenv": {
-                "path": legacy_path,
-                "python": "3.12.1"
-            }
-        }
+        registry_data = {"myenv": {"path": legacy_path, "python": "3.12.1"}}
         legacy_registry.write_text(json.dumps(registry_data))
 
-        with patch("pyvm_updater.paths.get_data_dir", return_value=env["data_dir"]):
-            with patch("pyvm_updater.paths.get_cache_dir", return_value=env["cache_dir"]):
-                with patch("pyvm_updater.paths.get_history_file", return_value=env["data_dir"] / "history.json"):
-                    with patch("pyvm_updater.paths.get_metadata_db", return_value=env["cache_dir"] / "metadata.sqlite"):
-                        with patch("pyvm_updater.paths.get_venv_registry_file", return_value=env["data_dir"] / "venvs.json"):
-                            with patch("pyvm_updater.paths.get_venv_dir", return_value=env["data_dir"] / "venvs"):
-                                with patch("pyvm_updater.paths._LEGACY_PATHS", {
-                                    "history": env["legacy_history"],
-                                    "metadata": env["legacy_metadata"],
-                                    "venv_dir": legacy_venv_dir,
-                                    "venv_registry": legacy_registry,
-                                    "config_dir": env["home"] / ".config" / "pyvm",
-                                    "config_file": env["home"] / ".config" / "pyvm" / "config.toml",
-                                }):
-                                    with patch("pyvm_updater.paths._migration_done", return_value=False):
-                                        with patch("pyvm_updater.paths._mark_migration_done"):
-                                            migrate_legacy_paths()
+        with (
+            patch("pyvm_updater.paths.get_data_dir", return_value=env["data_dir"]),
+            patch("pyvm_updater.paths.get_cache_dir", return_value=env["cache_dir"]),
+            patch("pyvm_updater.paths.get_history_file", return_value=env["data_dir"] / "history.json"),
+            patch("pyvm_updater.paths.get_metadata_db", return_value=env["cache_dir"] / "metadata.sqlite"),
+            patch("pyvm_updater.paths.get_venv_registry_file", return_value=env["data_dir"] / "venvs.json"),
+            patch("pyvm_updater.paths.get_venv_dir", return_value=env["data_dir"] / "venvs"),
+            patch(
+                "pyvm_updater.paths._LEGACY_PATHS",
+                {
+                    "history": env["legacy_history"],
+                    "metadata": env["legacy_metadata"],
+                    "venv_dir": legacy_venv_dir,
+                    "venv_registry": legacy_registry,
+                    "config_dir": env["home"] / ".config" / "pyvm",
+                    "config_file": env["home"] / ".config" / "pyvm" / "config.toml",
+                },
+            ),
+            patch("pyvm_updater.paths._migration_done", return_value=False),
+            patch("pyvm_updater.paths._mark_migration_done"),
+        ):
+            migrate_legacy_paths()
 
         # The migrated registry should have the path rewritten to the new venv dir
         migrated_registry_path = env["data_dir"] / "venvs.json"
@@ -159,6 +161,7 @@ class TestMigration:
         new_venv_dir = str(env["data_dir"] / "venvs")
         assert "myenv" in migrated
         assert migrated["myenv"]["path"].startswith(new_venv_dir)
+
     """Tests for legacy path migration."""
 
     @pytest.fixture
