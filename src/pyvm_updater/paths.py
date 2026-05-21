@@ -196,11 +196,33 @@ def migrate_legacy_paths() -> None:
 
     # Venv registry
     old_registry = _LEGACY_PATHS["venv_registry"]
+    new_registry = get_venv_registry_file()
     if old_registry.exists():
-        if not _move_file(old_registry, get_venv_registry_file()):
+        # Move the registry file first
+        if not _move_file(old_registry, new_registry):
             success = False
         else:
             migrated_any = True
+            # Rewrite any legacy venv paths in the registry
+            try:
+                import json
+                legacy_venv_dir = str(_LEGACY_PATHS["venv_dir"])
+                new_venv_dir = str(get_venv_dir())
+                with open(new_registry, "r", encoding="utf-8") as f:
+                    registry = json.load(f)
+                changed = False
+                for venv, meta in registry.items():
+                    # If the registry entry has a path under the legacy root, rewrite it
+                    if isinstance(meta, dict) and "path" in meta:
+                        path_val = meta["path"]
+                        if isinstance(path_val, str) and path_val.startswith(legacy_venv_dir):
+                            meta["path"] = new_venv_dir + path_val[len(legacy_venv_dir):]
+                            changed = True
+                if changed:
+                    with open(new_registry, "w", encoding="utf-8") as f:
+                        json.dump(registry, f, indent=2)
+            except Exception as e:
+                log.warning(f"Failed to rewrite legacy venv paths in registry: {e}")
 
     # Venv directory
     old_venv_dir = _LEGACY_PATHS["venv_dir"]
