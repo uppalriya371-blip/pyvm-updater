@@ -94,24 +94,29 @@ class TestNormalizeStatus:
     def test_prerelease_hyphenated(self):
         """Test that 'pre-release' is classified as prerelease."""
         from pyvm_updater.version import _normalize_status
+
         assert _normalize_status("pre-release") == "prerelease"
 
     def test_prerelease_exact(self):
         """Test that 'prerelease' is classified as prerelease."""
         from pyvm_updater.version import _normalize_status
+
         assert _normalize_status("prerelease") == "prerelease"
 
     def test_pre_exact(self):
         """Test that 'pre' is classified as prerelease."""
         from pyvm_updater.version import _normalize_status
+
         assert _normalize_status("pre") == "prerelease"
 
     def test_deprecated_no_false_positive(self):
         """Test that 'deprecated' is NOT classified as prerelease."""
         from pyvm_updater.version import _normalize_status
+
         assert _normalize_status("deprecated") != "prerelease"
 
     def test_prepared_no_false_positive(self):
         """Test that 'prepared' is NOT classified as prerelease."""
         from pyvm_updater.version import _normalize_status
+
         assert _normalize_status("prepared") != "prerelease"
