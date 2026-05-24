@@ -422,7 +422,7 @@ def is_python_version_installed(version_str: str) -> bool:
 
 def _normalize_status(text: str) -> str:
     t = text.lower()
-    if "pre-release" in t or "pre" in t:
+    if t in ("pre-release", "pre", "prerelease"):
         return "prerelease"
     if "bugfix" in t or "active" in t:
         return "active"
