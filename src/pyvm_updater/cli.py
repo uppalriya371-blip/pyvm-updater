@@ -845,7 +845,7 @@ def venv_path(name: str) -> None:
     else:
         click.echo(f"[X] Venv '{name}' not found.")
         sys.exit(1)
-        
+
 
 @venv.command("rename")
 @click.argument("old_name")
